@@ -99,13 +99,14 @@ async function runScan(){
 
   const url = URL.createObjectURL(file);
   try {
-    const { createWorker } = Tesseract;
-    const worker = await createWorker({
-      logger: m => console.log(m),
-      workerPath: 'tesseract/worker.min.js',
-      corePath:   'tesseract/tesseract-core.wasm',
-      langPath:   'tesseract/tessdata/'      // <- Slash am Ende ist Pflicht
-    });
+	const worker = await Tesseract.createWorker({
+	logger: m => console.log(m),
+	workerPath: 'tesseract/worker.min.js',
+	corePath:   'tesseract/tesseract-core.wasm', // jetzt 2.3.0
+	langPath:   'tesseract/tessdata/'            // Slash bleibt Pflicht
+	}
+);
+
 
     await worker.loadLanguage(OCR_LANG || 'deu+eng');
     await worker.initialize(OCR_LANG || 'deu+eng');

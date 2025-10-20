@@ -100,9 +100,9 @@ async function runScan() {
     const { createWorker } = Tesseract;
 
     const base = new URL(document.baseURI);
-    const workerPath = 'https://unpkg.com/tesseract.js@2.1.5/dist/worker.min.js';
+    const workerPath = 'https://unpkg.com/tesseract.js@2.1.1/dist/worker.min.js';
     const corePath   = 'https://unpkg.com/tesseract.js-core@2.1.1/tesseract-core.wasm.js'; // lädt selber .wasm
-    const langPath   = new URL('tesseract/tessdata/', document.baseURI).href;              // deine GZ lokal
+    const langPath   = new URL('tesseract/tessdata/', document.baseURI).href; // deine .gz lokal
 
     const worker = await createWorker({ logger: m => console.log(m), workerPath, corePath, langPath });
     await worker.loadLanguage('deu+eng');

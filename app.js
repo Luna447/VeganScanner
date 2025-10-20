@@ -84,11 +84,15 @@ function resetUI(){
   LAST_SCAN = null;
 }
 
-async function runScan(){
+async function runScan() {
   const file = el.file.files?.[0];
-  if(!file){ el.status.textContent = 'Kein Bild gewählt.'; return; }
+  if (!file) { 
+    el.status.textContent = 'Kein Bild gewählt.'; 
+    return; 
+  }
   if (file.type && file.type.toLowerCase().includes('heic')) {
-    el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.'; return;
+    el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.';
+    return;
   }
 
   el.btnScan.disabled = true;
@@ -98,19 +102,31 @@ async function runScan(){
   try {
     const { createWorker } = Tesseract;
 
-    // absolute URLs bauen, damit der Worker nicht falsche relative Pfade nimmt
+    // absolute Pfade, damit der Worker korrekt lädt
     const base = new URL(document.baseURI);
     const workerPath = new URL('tesseract/worker.min.js', base).href;
     const corePath   = new URL('tesseract/tesseract-core.wasm', base).href;
     const langPath   = new URL('tesseract/tessdata/', base).href;
 
-    const worker = await createWorker({ logger: m => console.log(m), workerPath, corePath, langPath });
-    await worker.loadLanguage(OCR_LANG || 'deu+eng');
-    await worker.initialize(OCR_LANG || 'deu+eng');
+    // Worker mit Version 2.2.0-Kompatibilität starten
+    const worker = await createWorker({
+      logger: m => console.log(m),
+      workerPath,
+      corePath,
+      langPath
+    });
 
+    // Sprache laden und initialisieren
+    await worker.loadLanguage('deu+eng');
+    await worker.initialize('deu+eng');
+
+    // Erkennung starten
     const { data: { text } } = await worker.recognize(url);
+
+    // Worker beenden
     await worker.terminate();
 
+    // Ergebnis anzeigen
     el.ocrText.textContent = text;
     const scan = analyze(text, DB);
     LAST_SCAN = { text, ...scan };
@@ -126,6 +142,7 @@ async function runScan(){
     el.btnReset.style.display = 'inline-block';
   }
 }
+
 
 
 

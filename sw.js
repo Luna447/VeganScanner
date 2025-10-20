@@ -1,4 +1,4 @@
-const CACHE='veganscanner-v9';
+const CACHE='veganscanner-v10';
 const ASSETS=[ './','./index.html','./app.js','./manifest.webmanifest','./ingredients-data.json',
   './icons/icon-192.png','./icons/icon-512.png',
   './tesseract/tesseract.min.js','./tesseract/worker.min.js',

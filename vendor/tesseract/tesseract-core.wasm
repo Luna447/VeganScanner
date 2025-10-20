@@ -1,0 +1,1 @@
+Package version not found: tesseract.js-core@2.1.1

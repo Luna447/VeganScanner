@@ -1,239 +1,67 @@
-// Sanity-Check: zeigt, ob die wichtigen Dateien erreichbar sind
-(async function sanityCheck(){
-  const checks = [
-    'https://unpkg.com/tesseract.js@2.1.1/dist/worker.min.js',
-    'https://unpkg.com/tesseract.js-core@2.1.1/tesseract-core.wasm.js',
-    'https://unpkg.com/tesseract.js-core@2.1.1/tesseract-core.wasm',
-    'tesseract/tessdata/eng.traineddata.gz',
-    'tesseract/tessdata/deu.traineddata.gz',
-  ];
-  for (const p of checks) {
-    try {
-      const r = await fetch(p, { cache: 'no-store' });
-      console.log(p, r.ok ? 'OK' : ('FAIL ' + r.status));
-    } catch(e) {
-      console.log(p, 'FAIL', e.message);
-    }
-  }
-})();
+// Minimaler Offline-OCR Flow ohne CDN.
+// Wichtig: Pfade zeigen in deinen Repo-Ordner vendor/tesseract
 
-/* ============ Konfiguration ============ */
+const $ = sel => document.querySelector(sel);
+const statusEl = $('#status');
+const ocrOut = $('#ocrOut');
 
-// Optionale Online-Listen
-const ONLINE_DB_URLS = [
-  // z.B. "https://raw.githubusercontent.com/.../ingredients-extended.json"
-];
-
-// OCR-Sprache: deutsch + englisch
-const OCR_LANG = 'deu+eng';
-
-// Simpler Normalizer für OCR-Fehler
-function normalize(s) {
-  return s
-    .toLowerCase()
-    .normalize('NFKC')
-    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
-    .replace(/[‐\-–—]/g,'-')
-    .replace(/[\s,;:()\/\\]+/g,' ')
-    .replace(/\bo\b/g,'0')
-    .replace(/\b1\b/g,'l')
-    .trim();
+function setStatus(msg) {
+  statusEl.textContent = msg || '';
+  console.log('[Status]', msg);
 }
 
-// UI-Refs
-const el = {
-  file: document.getElementById('fileInput'),
-  btnScan: document.getElementById('btnScan'),
-  btnRetake: document.getElementById('btnRetake'),
-  status: document.getElementById('status'),
-  verdict: document.getElementById('verdict'),
-  details: document.getElementById('details'),
-  ocrText: document.getElementById('ocrText'),
-  hitB: document.getElementById('hitB'),
-  hitG: document.getElementById('hitG'),
-  hitE: document.getElementById('hitE'),
-  btnOnline: document.getElementById('btnOnline'),
-  btnReset: document.getElementById('btnReset'),
-};
+let worker = null;
 
-let DB = null;
-let EXT = null;
-let LAST_SCAN = null;
+async function ensureWorker() {
+  if (worker) return worker;
 
-// Zutatenliste laden
-fetch('ingredients-data.json')
-  .then(r => r.json())
-  .then(j => { DB = j; el.status.textContent = 'Bereit. Foto auswählen und „Scannen“.'; })
-  .catch(err => { console.error(err); el.status.textContent = 'Fehler beim Laden der Zutatenliste.'; });
+  worker = Tesseract.createWorker({
+    // exakt diese relativen Pfade:
+    workerPath: 'vendor/tesseract/worker.min.js',
+    corePath:   'vendor/tesseract/tesseract-core.wasm.js',
+    langPath:   'vendor/tesseract/lang'
+  });
 
-// Buttons
-el.btnScan.addEventListener('click', () => runScan());
-el.btnRetake.addEventListener('click', () => { el.file.value = ''; resetUI(); });
-el.btnOnline.addEventListener('click', () => tryOnline());
-el.btnReset.addEventListener('click', resetUI);
+  setStatus('Lade OCR-Worker…');
+  await worker.load();
 
-function resetUI(){
-  el.status.textContent = 'Bereit. Foto auswählen und „Scannen“.';
-  el.verdict.style.display = 'none';
-  el.details.textContent = '';
-  el.ocrText.textContent = '';
-  el.hitB.innerHTML = '';
-  el.hitG.innerHTML = '';
-  el.hitE.innerHTML = '';
-  el.btnOnline.style.display = 'none';
-  el.btnReset.style.display = 'none';
-  el.btnRetake.style.display = 'none';
-  LAST_SCAN = null;
+  setStatus('Lade Sprachdaten (deu+eng)…');
+  await worker.loadLanguage('deu+eng');
+  await worker.initialize('deu+eng');
+
+  setStatus('Bereit.');
+  return worker;
 }
 
-// beim Scannen:
-async function runScan() {
-  const file = el.file.files?.[0];
-  if (!file){ el.status.textContent = 'Kein Bild gewählt.'; return; }
-  if (file.type?.toLowerCase().includes('heic')) {
-    el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.'; return;
-  }
+async function doOCR(file) {
+  if (!file) throw new Error('Keine Datei ausgewählt');
 
-  el.btnScan.disabled = true;
-  el.status.textContent = 'OCR läuft…';
+  const w = await ensureWorker();
+  setStatus('Erkenne Text…');
 
-  const url = URL.createObjectURL(file);
+  const { data } = await w.recognize(file);
+  setStatus('Fertig.');
+  return data.text || '';
+}
+
+$('#scanBtn').addEventListener('click', async () => {
   try {
-    const { createWorker } = Tesseract;
-
-    // fest gepinnte 2.1.1-Pfade
-    const workerPath = 'https://unpkg.com/tesseract.js@2.1.1/dist/worker.min.js';
-    const corePath   = 'https://unpkg.com/tesseract.js-core@2.1.1/tesseract-core.wasm.js'; // lädt selbst das .wasm
-    const langPath   = new URL('tesseract/tessdata/', document.baseURI).href; // deine .gz lokal
-
-    const worker = await createWorker({
-      logger: m => console.log(m),
-      workerPath,
-      corePath,
-      langPath
-    });
-
-    await worker.loadLanguage(OCR_LANG);
-    await worker.initialize(OCR_LANG);
-
-    const { data: { text } } = await worker.recognize(url);
-    await worker.terminate();
-
-    el.ocrText.textContent = text;
-    const scan = analyze(text, DB);
-    LAST_SCAN = { text, ...scan };
-    renderResult(scan);
-
+    const file = $('#file').files[0];
+    const text = await doOCR(file);
+    ocrOut.textContent = text.trim();
   } catch (e) {
+    setStatus('Fehler: ' + e.message);
     console.error(e);
-    el.status.textContent = 'Fehler bei der OCR: ' + (e?.message || 'siehe Konsole');
-  } finally {
-    URL.revokeObjectURL(url);
-    el.btnScan.disabled = false;
-    el.btnRetake.style.display = 'inline-block';
-    el.btnReset.style.display = 'inline-block';
   }
-}
+});
 
-function analyze(text, data) {
-  if(!data) return { verdict:'Unklar', hitsB:[], hitsG:[], eHits:[], unknownTokens:[] };
+$('#resetBtn').addEventListener('click', () => {
+  $('#file').value = '';
+  ocrOut.textContent = '';
+  setStatus('');
+});
 
-  const t = normalize(text);
-  const hitsB = [];
-  const hitsG = [];
-  const unknown = new Set();
-
-  for(const k of data.blacklist) if(t.includes(k)) hitsB.push(k);
-  for(const k of data.greylist)  if(t.includes(k)) hitsG.push(k);
-
-  const eHits = Array.from(t.matchAll(/\be\d{3,4}[a-f]?\b/g)).map(m => m[0]);
-
-  for(const e of eHits){
-    const tag = data.enumbers[e];
-    if(tag === 'not_vegan' && !hitsB.includes(e)) hitsB.push(e);
-    else if(tag === 'maybe' && !hitsG.includes(e)) hitsG.push(e);
-    else if(!tag) unknown.add(e);
-  }
-
-  const tokens = t.split(/[\s,;:()]+/g).filter(s => s.length >= 3);
-  const knownSet = new Set([...data.blacklist, ...data.greylist, ...Object.keys(data.enumbers)]);
-  for(const tok of tokens){
-    if(/^[a-z0-9\-]+$/.test(tok) && !knownSet.has(tok) && /^[a-z]/.test(tok)) {
-      if(['zutaten','spuren','kann','enthält','hergestellt','mit','und','oder','aus','von','frei','ohne','natürliches','natuerliches','aroma','aromen','farbstoff','emulgator','stabilisator','säureregulator','saeureregulator','suesstoff','süßstoff','gewürz','gewuerz','gewürze','gewuerze','pflanzlich','pflanzliche','öl','oel','fett','fette','protein','proteinpulver','extrakt','pulver','konzentrat','mehl','stärke','staerke'].includes(tok)) continue;
-      unknown.add(tok);
-    }
-  }
-
-  let verdict = 'Vegan ✅';
-  if(hitsB.length) verdict = 'Nicht vegan ❌';
-  else if(hitsG.length || unknown.size) verdict = 'Unklar ⚠️';
-
-  return {
-    verdict,
-    hitsB: Array.from(new Set(hitsB)).sort(),
-    hitsG: Array.from(new Set(hitsG)).sort(),
-    eHits: Array.from(new Set(eHits)).sort(),
-    unknownTokens: Array.from(unknown).slice(0, 30)
-  };
-}
-
-function renderResult(scan){
-  const v = el.verdict;
-  v.style.display = 'inline-block';
-  v.textContent = scan.verdict;
-  v.classList.remove('ok','warn','bad');
-  if(scan.verdict.startsWith('Vegan')) v.classList.add('ok');
-  else if(scan.verdict.startsWith('Nicht')) v.classList.add('bad');
-  else v.classList.add('warn');
-
-  el.hitB.innerHTML = scan.hitsB.map(x => `<span class="pill">${x}</span>`).join(' ') || '<span class="small">keine</span>';
-  el.hitG.innerHTML = scan.hitsG.map(x => `<span class="pill">${x}</span>`).join(' ') || '<span class="small">keine</span>';
-  el.hitE.innerHTML = scan.eHits.map(x => `<span class="pill">${x}</span>`).join(' ') || '<span class="small">keine</span>';
-
-  const unknown = scan.unknownTokens.map(x => `<span class="pill">${x}</span>`).join(' ');
-  el.details.innerHTML = (unknown ? `Unbekannt/prüfen: ${unknown}` : '');
-  el.status.textContent = 'Fertig.';
-  el.btnOnline.style.display = (scan.verdict !== 'Vegan ✅') ? 'inline-block' : 'none';
-}
-
-async function tryOnline(){
-  if(!ONLINE_DB_URLS.length){
-    el.status.textContent = 'Keine Online-Quellen konfiguriert. Trage URLs in ONLINE_DB_URLS ein.';
-    return;
-  }
-  el.btnOnline.disabled = true;
-  el.status.textContent = 'Lade Online-Erweiterungen…';
-
-  try{
-    const lists = await Promise.allSettled(
-      ONLINE_DB_URLS.map(u => fetch(u, {cache:'no-store'}).then(r => r.json()))
-    );
-    const ext = { blacklist:[], greylist:[], enumbers:{} };
-    for(const r of lists){
-      if(r.status !== 'fulfilled') continue;
-      const j = r.value;
-      if(Array.isArray(j.blacklist)) ext.blacklist.push(...j.blacklist);
-      if(Array.isArray(j.greylist))  ext.greylist.push(...j.greylist);
-      if(j.enumbers && typeof j.enumbers === 'object') Object.assign(ext.enumbers, j.enumbers);
-    }
-    ext.blacklist = Array.from(new Set(ext.blacklist || []));
-    ext.greylist  = Array.from(new Set(ext.greylist  || []));
-
-    EXT = {
-      blacklist: Array.from(new Set([...(DB.blacklist||[]), ...(ext.blacklist||[])])),
-      greylist:  Array.from(new Set([...(DB.greylist||[]),  ...(ext.greylist||[])])),
-      enumbers:  Object.assign({}, DB.enumbers||{}, ext.enumbers||{})
-    };
-
-    const scan = analyze(LAST_SCAN?.text || '', EXT);
-    LAST_SCAN = { text: LAST_SCAN?.text || '', ...scan };
-    renderResult(scan);
-    el.status.textContent = 'Online-Erweiterung geladen.';
-
-  } catch(e){
-    console.error(e);
-    el.status.textContent = 'Fehler bei der Online-Prüfung.';
-  } finally {
-    el.btnOnline.disabled = false;
-  }
-}
+// Optional: beim Verlassen Worker beenden
+window.addEventListener('beforeunload', async () => {
+  try { if (worker) await worker.terminate(); } catch {}
+});

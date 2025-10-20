@@ -1,7 +1,7 @@
-<!doctype html> 
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8"> <!-- utf8 sicherstellen -->
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Vegan Scanner</title>
 
@@ -53,7 +53,7 @@
 
     <section class="card">
       <details>
-        <summary>Zutaten-Text(OCR)</summary>
+        <summary>Zutaten-Text (OCR)</summary>
         <pre id="ocrText"></pre>
       </details>
       <details>
@@ -64,7 +64,7 @@
       </details>
     </section>
 
-<section class="card small">
+    <section class="card small">
       <strong>Hinweise:</strong>
       <ul>
         <li>Offline-Scan: lokal per OCR und lokaler Zutatenliste.</li>
@@ -74,10 +74,15 @@
     </section>
   </main>
 
-  <!-- Tesseract lokal -->
+  <!-- Tesseract 2.1.1 fest gepinnt -->
   <script src="https://unpkg.com/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
   <script src="./app.js"></script>
-  <!-- <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js')}</script> -->
-  
+
+  <script>
+    // SW registrieren (nachdem alles oben geladen ist)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
 </body>
 </html>

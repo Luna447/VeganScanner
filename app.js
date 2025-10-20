@@ -1,25 +1,27 @@
-// sanityCheck:
+// Sanity-Check: zeigt, ob die wichtigen Dateien erreichbar sind
 (async function sanityCheck(){
-  for (const p of [
-    'tesseract/tesseract.min.js',
-    'tesseract/worker.min.js',
-    'tesseract/tesseract-core.wasm.js',
-    'tesseract/tesseract-core.wasm',
+  const checks = [
+    'https://unpkg.com/tesseract.js@2.1.1/dist/worker.min.js',
+    'https://unpkg.com/tesseract.js-core@2.1.1/tesseract-core.wasm.js',
+    'https://unpkg.com/tesseract.js-core@2.1.1/tesseract-core.wasm',
     'tesseract/tessdata/eng.traineddata.gz',
-    'tesseract/tessdata/deu.traineddata.gz'
-  ]) {
-    const r = await fetch(p, { cache: 'no-store' });
-    console.log(p, r.ok ? 'OK' : ('FAIL ' + r.status));
+    'tesseract/tessdata/deu.traineddata.gz',
+  ];
+  for (const p of checks) {
+    try {
+      const r = await fetch(p, { cache: 'no-store' });
+      console.log(p, r.ok ? 'OK' : ('FAIL ' + r.status));
+    } catch(e) {
+      console.log(p, 'FAIL', e.message);
+    }
   }
 })();
 
-
 /* ============ Konfiguration ============ */
 
-// Optionale Online-Listen (kannst du später auf eigene GitHub Raw URLs zeigen lassen)
+// Optionale Online-Listen
 const ONLINE_DB_URLS = [
-  // Beispielplatzhalter – trage hier später echte JSON-URLs ein.
-  // "https://dein-host.xyz/veganscanner/ingredients-extended.json"
+  // z.B. "https://raw.githubusercontent.com/.../ingredients-extended.json"
 ];
 
 // OCR-Sprache: deutsch + englisch
@@ -31,10 +33,10 @@ function normalize(s) {
     .toLowerCase()
     .normalize('NFKC')
     .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
-    .replace(/[‐-–—]/g,'-')              // verschiedene Bindestriche
-    .replace(/[\s,;:()\/\\]+/g,' ')       // Trennzeichen vereinheitlichen
-    .replace(/\bo\b/g,'0')                // manchmal o↔0 vertauscht; hier konservativ
-    .replace(/\b1\b/g,'l')                // 1 ↔ l
+    .replace(/[‐\-–—]/g,'-')
+    .replace(/[\s,;:()\/\\]+/g,' ')
+    .replace(/\bo\b/g,'0')
+    .replace(/\b1\b/g,'l')
     .trim();
 }
 
@@ -54,9 +56,9 @@ const el = {
   btnReset: document.getElementById('btnReset'),
 };
 
-let DB = null;          // Lokale Zutatenliste
-let EXT = null;         // Geladene Online-Erweiterungen (gemerged)
-let LAST_SCAN = null;   // Merkt sich letzten OCR-Text + Hits
+let DB = null;
+let EXT = null;
+let LAST_SCAN = null;
 
 // Zutatenliste laden
 fetch('ingredients-data.json')
@@ -99,14 +101,20 @@ async function runScan() {
   try {
     const { createWorker } = Tesseract;
 
-    const base = new URL(document.baseURI);
+    // fest gepinnte 2.1.1-Pfade
     const workerPath = 'https://unpkg.com/tesseract.js@2.1.1/dist/worker.min.js';
-    const corePath   = 'https://unpkg.com/tesseract.js-core@2.1.1/tesseract-core.wasm.js'; // lädt selber .wasm
+    const corePath   = 'https://unpkg.com/tesseract.js-core@2.1.1/tesseract-core.wasm.js'; // lädt selbst das .wasm
     const langPath   = new URL('tesseract/tessdata/', document.baseURI).href; // deine .gz lokal
 
-    const worker = await createWorker({ logger: m => console.log(m), workerPath, corePath, langPath });
-    await worker.loadLanguage('deu+eng');
-    await worker.initialize('deu+eng');
+    const worker = await createWorker({
+      logger: m => console.log(m),
+      workerPath,
+      corePath,
+      langPath
+    });
+
+    await worker.loadLanguage(OCR_LANG);
+    await worker.initialize(OCR_LANG);
 
     const { data: { text } } = await worker.recognize(url);
     await worker.terminate();
@@ -127,7 +135,6 @@ async function runScan() {
   }
 }
 
-
 function analyze(text, data) {
   if(!data) return { verdict:'Unklar', hitsB:[], hitsG:[], eHits:[], unknownTokens:[] };
 
@@ -136,14 +143,11 @@ function analyze(text, data) {
   const hitsG = [];
   const unknown = new Set();
 
-  // Volltext-Matches
   for(const k of data.blacklist) if(t.includes(k)) hitsB.push(k);
   for(const k of data.greylist)  if(t.includes(k)) hitsG.push(k);
 
-  // E-Nummern herausziehen
-  const eHits = Array.from(t.matchAll(/\be\d{3,4}\b/g)).map(m => m[0]);
+  const eHits = Array.from(t.matchAll(/\be\d{3,4}[a-f]?\b/g)).map(m => m[0]);
 
-  // E-Nummern auflösen
   for(const e of eHits){
     const tag = data.enumbers[e];
     if(tag === 'not_vegan' && !hitsB.includes(e)) hitsB.push(e);
@@ -151,13 +155,10 @@ function analyze(text, data) {
     else if(!tag) unknown.add(e);
   }
 
-  // Unbekannte Wörter grob schätzen: nimm einzelne Zutaten-Tokens
-  // Split an Trennzeichen, filtere zu kurze/unnütze Tokens.
   const tokens = t.split(/[\s,;:()]+/g).filter(s => s.length >= 3);
   const knownSet = new Set([...data.blacklist, ...data.greylist, ...Object.keys(data.enumbers)]);
   for(const tok of tokens){
     if(/^[a-z0-9\-]+$/.test(tok) && !knownSet.has(tok) && /^[a-z]/.test(tok)) {
-      // ein paar offensichtlich generische Wörter ignorieren
       if(['zutaten','spuren','kann','enthält','hergestellt','mit','und','oder','aus','von','frei','ohne','natürliches','natuerliches','aroma','aromen','farbstoff','emulgator','stabilisator','säureregulator','saeureregulator','suesstoff','süßstoff','gewürz','gewuerz','gewürze','gewuerze','pflanzlich','pflanzliche','öl','oel','fett','fette','protein','proteinpulver','extrakt','pulver','konzentrat','mehl','stärke','staerke'].includes(tok)) continue;
       unknown.add(tok);
     }
@@ -172,7 +173,7 @@ function analyze(text, data) {
     hitsB: Array.from(new Set(hitsB)).sort(),
     hitsG: Array.from(new Set(hitsG)).sort(),
     eHits: Array.from(new Set(eHits)).sort(),
-    unknownTokens: Array.from(unknown).slice(0, 30) // begrenzen für die Anzeige
+    unknownTokens: Array.from(unknown).slice(0, 30)
   };
 }
 
@@ -192,8 +193,6 @@ function renderResult(scan){
   const unknown = scan.unknownTokens.map(x => `<span class="pill">${x}</span>`).join(' ');
   el.details.innerHTML = (unknown ? `Unbekannt/prüfen: ${unknown}` : '');
   el.status.textContent = 'Fertig.';
-
-  // Hybrid-Button einblenden, wenn unklar oder unbekanntes Zeug dabei ist
   el.btnOnline.style.display = (scan.verdict !== 'Vegan ✅') ? 'inline-block' : 'none';
 }
 
@@ -206,8 +205,9 @@ async function tryOnline(){
   el.status.textContent = 'Lade Online-Erweiterungen…';
 
   try{
-    // Online-Listen holen und mergen
-    const lists = await Promise.allSettled(ONLINE_DB_URLS.map(u => fetch(u, {cache:'no-store'}).then(r => r.json())));
+    const lists = await Promise.allSettled(
+      ONLINE_DB_URLS.map(u => fetch(u, {cache:'no-store'}).then(r => r.json()))
+    );
     const ext = { blacklist:[], greylist:[], enumbers:{} };
     for(const r of lists){
       if(r.status !== 'fulfilled') continue;
@@ -216,18 +216,15 @@ async function tryOnline(){
       if(Array.isArray(j.greylist))  ext.greylist.push(...j.greylist);
       if(j.enumbers && typeof j.enumbers === 'object') Object.assign(ext.enumbers, j.enumbers);
     }
-    // Deduplizieren
     ext.blacklist = Array.from(new Set(ext.blacklist || []));
     ext.greylist  = Array.from(new Set(ext.greylist  || []));
 
-    // Merge in DB (ohne Original zu zerstören)
     EXT = {
       blacklist: Array.from(new Set([...(DB.blacklist||[]), ...(ext.blacklist||[])])),
       greylist:  Array.from(new Set([...(DB.greylist||[]),  ...(ext.greylist||[])])),
       enumbers:  Object.assign({}, DB.enumbers||{}, ext.enumbers||{})
     };
 
-    // Neu analysieren mit erweiterter DB
     const scan = analyze(LAST_SCAN?.text || '', EXT);
     LAST_SCAN = { text: LAST_SCAN?.text || '', ...scan };
     renderResult(scan);

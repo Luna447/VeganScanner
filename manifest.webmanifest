@@ -1,9 +1,9 @@
 {
-  "name": "Vegan Scanner",
-  "short_name": "Vegan",
-  "start_url": "index.html",
-  "scope": "./",
-  "display": "standalone",
+  "name": "VeganScanner",
+  "short_name": "Vegscan",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
   "background_color": "#0b1212",
   "theme_color": "#0f766e",
   "icons": [

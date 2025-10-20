@@ -1,16 +1,14 @@
-const CACHE = 'veganscanner-v1';
+const CACHE = 'veganscanner-v5';
 const ASSETS = [
-  './',
-  './index.html',
-  './app.js',
-  './manifest.webmanifest',
+  './','./index.html','./app.js','./manifest.webmanifest',
   './ingredients-data.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './tesseract/tesseract.min.js',
-  './tesseract/tesseract.worker.min.js',
-  './tesseract/tesseract-core.wasm'
+  './icons/icon-192.png','./icons/icon-512.png',
+  './tesseract/tesseract.min.js','./tesseract/worker.min.js',
+  './tesseract/tesseract-core.wasm',
+  './tesseract/tessdata/eng.traineddata.gz',
+  './tesseract/tessdata/deu.traineddata.gz'
 ];
+
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));

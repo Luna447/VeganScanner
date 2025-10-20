@@ -87,27 +87,24 @@ function resetUI(){
 async function runScan(){
   const file = el.file.files?.[0];
   if(!file){ el.status.textContent = 'Kein Bild gewählt.'; return; }
-
-  // HEIC kurz abfangen
   if (file.type && file.type.toLowerCase().includes('heic')) {
-    el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.';
-    return;
+    el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.'; return;
   }
 
   el.btnScan.disabled = true;
-  el.status.textContent = 'OCR läuft… das dauert je nach Gerät ein paar Sekunden.';
+  el.status.textContent = 'OCR läuft…';
 
   const url = URL.createObjectURL(file);
   try {
-	const worker = await Tesseract.createWorker({
-	logger: m => console.log(m),
-	workerPath: 'tesseract/worker.min.js',
-	corePath:   'tesseract/tesseract-core.wasm', // jetzt 2.3.0
-	langPath:   'tesseract/tessdata/'            // Slash bleibt Pflicht
-	}
-);
+    const { createWorker } = Tesseract;
 
+    // absolute URLs bauen, damit der Worker nicht falsche relative Pfade nimmt
+    const base = new URL(document.baseURI);
+    const workerPath = new URL('tesseract/worker.min.js', base).href;
+    const corePath   = new URL('tesseract/tesseract-core.wasm', base).href;
+    const langPath   = new URL('tesseract/tessdata/', base).href;
 
+    const worker = await createWorker({ logger: m => console.log(m), workerPath, corePath, langPath });
     await worker.loadLanguage(OCR_LANG || 'deu+eng');
     await worker.initialize(OCR_LANG || 'deu+eng');
 
@@ -121,7 +118,7 @@ async function runScan(){
 
   } catch (e) {
     console.error(e);
-    el.status.textContent = 'Fehler bei der OCR: ' + (e && e.message ? e.message : 'siehe Konsole');
+    el.status.textContent = 'Fehler bei der OCR: ' + (e?.message || 'siehe Konsole');
   } finally {
     URL.revokeObjectURL(url);
     el.btnScan.disabled = false;
@@ -129,6 +126,7 @@ async function runScan(){
     el.btnReset.style.display = 'inline-block';
   }
 }
+
 
 
 

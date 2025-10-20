@@ -1,44 +1,35 @@
-// Minimaler Offline-OCR Flow ohne CDN.
-// Wichtig: Pfade zeigen in deinen Repo-Ordner vendor/tesseract
+const $ = s => document.querySelector(s);
+const statusEl = $('#status'), ocrOut = $('#ocrOut');
+const setStatus = m => { statusEl.textContent = m || ''; console.log('[Status]', m); };
 
-const $ = sel => document.querySelector(sel);
-const statusEl = $('#status');
-const ocrOut = $('#ocrOut');
-
-function setStatus(msg) {
-  statusEl.textContent = msg || '';
-  console.log('[Status]', msg);
-}
-
-let worker = null;
+let worker;
 
 async function ensureWorker() {
   if (worker) return worker;
 
   worker = Tesseract.createWorker({
-    // exakt diese relativen Pfade:
+    // harte, relative Pfade – keine Querystrings, keine Module
     workerPath: 'vendor/tesseract/worker.min.js',
     corePath:   'vendor/tesseract/tesseract-core.wasm.js',
-    langPath:   'vendor/tesseract/lang'
+    langPath:   'vendor/tesseract/lang',
+    logger: m => console.log('[tess]', m)
   });
 
   setStatus('Lade OCR-Worker…');
   await worker.load();
-
-  setStatus('Lade Sprachdaten (deu+eng)…');
+  setStatus('Lade Sprachdaten…');
   await worker.loadLanguage('deu+eng');
   await worker.initialize('deu+eng');
 
+  console.log('Tesseract version:', Tesseract.version);
   setStatus('Bereit.');
   return worker;
 }
 
 async function doOCR(file) {
   if (!file) throw new Error('Keine Datei ausgewählt');
-
   const w = await ensureWorker();
   setStatus('Erkenne Text…');
-
   const { data } = await w.recognize(file);
   setStatus('Fertig.');
   return data.text || '';
@@ -61,7 +52,6 @@ $('#resetBtn').addEventListener('click', () => {
   setStatus('');
 });
 
-// Optional: beim Verlassen Worker beenden
 window.addEventListener('beforeunload', async () => {
   try { if (worker) await worker.terminate(); } catch {}
 });

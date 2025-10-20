@@ -1,16 +1,21 @@
 (async function sanityCheck(){
-  for (const p of [
+  const paths = [
     'tesseract/worker.min.js',
-    'tesseract/tesseract-core-220.wasm',   // <— hier auch
     'tesseract/tessdata/eng.traineddata.gz',
     'tesseract/tessdata/deu.traineddata.gz',
     'tesseract/tesseract-core.wasm.js',
-    'tesseract/tesseract-core.wasm',
-  ]) {
-    const r = await fetch(p, { cache: 'no-store' });
-    console.log(p, r.ok ? 'OK' : ('FAIL '+r.status));
+    'tesseract/tesseract-core.wasm'
+  ];
+  for (const p of paths) {
+    try {
+      const r = await fetch(p, { cache: 'no-store' });
+      console.log(p, r.ok ? 'OK' : ('FAIL ' + r.status));
+    } catch (e) {
+      console.log(p, 'FAIL', e);
+    }
   }
 })();
+
 
 
 /* ============ Konfiguration ============ */

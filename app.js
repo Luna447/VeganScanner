@@ -12,7 +12,7 @@
     } catch(e){ console.error(p,'FAIL',e); }
   }
 })();
-
+  
 
 /* ============ Konfiguration ============ */
 

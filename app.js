@@ -1,18 +1,15 @@
 (async function sanityCheck(){
-  const paths = [
+  for (const p of [
     'tesseract/worker.min.js',
-    'tesseract/tesseract-core.wasm',
+    'tesseract/tesseract-core-220.wasm',   // <— hier auch
     'tesseract/tessdata/eng.traineddata.gz',
     'tesseract/tessdata/deu.traineddata.gz'
-  ];
-  for (const p of paths) {
-    try {
-      const r = await fetch(p, { cache: 'no-store' });
-      console.log(p, r.ok ? 'OK' : ('FAIL '+r.status));
-    } catch(e){ console.error(p,'FAIL',e); }
+  ]) {
+    const r = await fetch(p, { cache: 'no-store' });
+    console.log(p, r.ok ? 'OK' : ('FAIL '+r.status));
   }
 })();
-  
+
 
 /* ============ Konfiguration ============ */
 
@@ -86,13 +83,9 @@ function resetUI(){
 
 async function runScan() {
   const file = el.file.files?.[0];
-  if (!file) { 
-    el.status.textContent = 'Kein Bild gewählt.'; 
-    return; 
-  }
+  if (!file) { el.status.textContent = 'Kein Bild gewählt.'; return; }
   if (file.type && file.type.toLowerCase().includes('heic')) {
-    el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.';
-    return;
+    el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.'; return;
   }
 
   el.btnScan.disabled = true;
@@ -102,31 +95,22 @@ async function runScan() {
   try {
     const { createWorker } = Tesseract;
 
-    // absolute Pfade, damit der Worker korrekt lädt
     const base = new URL(document.baseURI);
-    const workerPath = new URL('tesseract/worker.min.js', base).href;
-    const corePath   = new URL('tesseract/tesseract-core.wasm', base).href;
+    const workerPath = new URL('tesseract/worker.min.js', base).href;           // 2.1.5
+    const corePath   = new URL('tesseract/tesseract-core-220.wasm', base).href; // NEUER NAME
     const langPath   = new URL('tesseract/tessdata/', base).href;
 
-    // Worker mit Version 2.2.0-Kompatibilität starten
-    const worker = await createWorker({
-      logger: m => console.log(m),
-      workerPath,
-      corePath,
-      langPath
-    });
+    console.log('workerPath:', workerPath);
+    console.log('corePath:', corePath);
+    console.log('langPath:', langPath);
 
-    // Sprache laden und initialisieren
+    const worker = await createWorker({ logger: m => console.log(m), workerPath, corePath, langPath });
     await worker.loadLanguage('deu+eng');
     await worker.initialize('deu+eng');
 
-    // Erkennung starten
     const { data: { text } } = await worker.recognize(url);
-
-    // Worker beenden
     await worker.terminate();
 
-    // Ergebnis anzeigen
     el.ocrText.textContent = text;
     const scan = analyze(text, DB);
     LAST_SCAN = { text, ...scan };
@@ -142,8 +126,6 @@ async function runScan() {
     el.btnReset.style.display = 'inline-block';
   }
 }
-
-
 
 
 

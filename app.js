@@ -88,6 +88,12 @@ async function runScan(){
   const file = el.file.files?.[0];
   if(!file){ el.status.textContent = 'Kein Bild gewählt.'; return; }
 
+  // HEIC kurz abfangen
+  if (file.type && file.type.toLowerCase().includes('heic')) {
+    el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.';
+    return;
+  }
+
   el.btnScan.disabled = true;
   el.status.textContent = 'OCR läuft… das dauert je nach Gerät ein paar Sekunden.';
 
@@ -95,10 +101,10 @@ async function runScan(){
   try {
     const { createWorker } = Tesseract;
     const worker = await createWorker({
-      logger: m => { /* optional Progress */ },
-      workerPath: 'tesseract/worker.min.js',          // korrekt
-      corePath:   'tesseract/tesseract-core.wasm',    // korrekt
-      langPath:   'tesseract/tessdata'                // Ordner mit eng/deu .gz
+      logger: m => console.log(m),
+      workerPath: 'tesseract/worker.min.js',
+      corePath:   'tesseract/tesseract-core.wasm',
+      langPath:   'tesseract/tessdata/'      // <- Slash am Ende ist Pflicht
     });
 
     await worker.loadLanguage(OCR_LANG || 'deu+eng');
@@ -108,14 +114,13 @@ async function runScan(){
     await worker.terminate();
 
     el.ocrText.textContent = text;
-
     const scan = analyze(text, DB);
     LAST_SCAN = { text, ...scan };
     renderResult(scan);
 
   } catch (e) {
     console.error(e);
-    el.status.textContent = 'Fehler bei der OCR (prüfe Pfade/Dateien im Ordner tesseract/).';
+    el.status.textContent = 'Fehler bei der OCR: ' + (e && e.message ? e.message : 'siehe Konsole');
   } finally {
     URL.revokeObjectURL(url);
     el.btnScan.disabled = false;
@@ -123,6 +128,7 @@ async function runScan(){
     el.btnReset.style.display = 'inline-block';
   }
 }
+
 
 
 function analyze(text, data) {

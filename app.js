@@ -4,8 +4,8 @@
     'tesseract/tesseract-core-220.wasm',   // <— hier auch
     'tesseract/tessdata/eng.traineddata.gz',
     'tesseract/tessdata/deu.traineddata.gz'
-	'tesseract/tesseract-core.wasm.js',
-	'tesseract/tesseract-core.wasm',
+    'tesseract/tesseract-core.wasm.js',
+    'tesseract/tesseract-core.wasm',
   ]) {
     const r = await fetch(p, { cache: 'no-store' });
     console.log(p, r.ok ? 'OK' : ('FAIL '+r.status));

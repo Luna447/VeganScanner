@@ -4,6 +4,8 @@
     'tesseract/tesseract-core-220.wasm',   // <— hier auch
     'tesseract/tessdata/eng.traineddata.gz',
     'tesseract/tessdata/deu.traineddata.gz'
+	'tesseract/tesseract-core.wasm.js',
+	'tesseract/tesseract-core.wasm',
   ]) {
     const r = await fetch(p, { cache: 'no-store' });
     console.log(p, r.ok ? 'OK' : ('FAIL '+r.status));
@@ -83,7 +85,7 @@ function resetUI(){
 
 async function runScan() {
   const file = el.file.files?.[0];
-  if (!file) { el.status.textContent = 'Kein Bild gewählt.'; return; }
+  if (!file){ el.status.textContent = 'Kein Bild gewählt.'; return; }
   if (file.type && file.type.toLowerCase().includes('heic')) {
     el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.'; return;
   }
@@ -96,13 +98,9 @@ async function runScan() {
     const { createWorker } = Tesseract;
 
     const base = new URL(document.baseURI);
-    const workerPath = new URL('tesseract/worker.min.js', base).href;           // 2.1.5
-    const corePath   = new URL('tesseract/tesseract-core-220.wasm', base).href; // NEUER NAME
+    const workerPath = new URL('tesseract/worker.min.js', base).href;              // 2.1.5
+    const corePath   = new URL('tesseract/tesseract-core.wasm.js', base).href;     // <-- WICHTIG: .wasm.js
     const langPath   = new URL('tesseract/tessdata/', base).href;
-
-    console.log('workerPath:', workerPath);
-    console.log('corePath:', corePath);
-    console.log('langPath:', langPath);
 
     const worker = await createWorker({ logger: m => console.log(m), workerPath, corePath, langPath });
     await worker.loadLanguage('deu+eng');
@@ -126,6 +124,7 @@ async function runScan() {
     el.btnReset.style.display = 'inline-block';
   }
 }
+
 
 
 

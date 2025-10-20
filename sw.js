@@ -1,12 +1,15 @@
 // sw.js
-const CACHE = 'veganscanner-v11';
+const CACHE = 'veganscanner-v12';
 const ASSETS = [
   './','./index.html','./app.js','./manifest.webmanifest','./ingredients-data.json',
   './icons/icon-192.png','./icons/icon-512.png',
   './tesseract/tesseract.min.js','./tesseract/worker.min.js',
-  './tesseract/tesseract-core-220.wasm',                    // <— neuer Name
-  './tesseract/tessdata/eng.traineddata.gz','./tesseract/tessdata/deu.traineddata.gz'
+  './tesseract/tesseract-core.wasm.js',   // <-- neu
+  './tesseract/tesseract-core.wasm',      // <-- bleibt
+  './tesseract/tessdata/eng.traineddata.gz',
+  './tesseract/tessdata/deu.traineddata.gz'
 ];
+
 
 
 self.addEventListener('install', e => {

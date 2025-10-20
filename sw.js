@@ -1,10 +1,11 @@
 // sw.js
-const CACHE = 'veganscanner-v13';
+const CACHE = 'veganscanner-v14';
 const ASSETS = [
   './','./index.html','./app.js','./manifest.webmanifest','./ingredients-data.json',
   './icons/icon-192.png','./icons/icon-512.png',
   './tesseract/tesseract.min.js','./tesseract/worker.min.js',
-  './tesseract/tesseract-core.wasm.js','./tesseract/tesseract-core.wasm',
+  './tesseract/tesseract-core.wasm.js',   // jetzt 2.1.1
+  './tesseract/tesseract-core.wasm',      // jetzt 2.1.1
   './tesseract/tessdata/eng.traineddata.gz','./tesseract/tessdata/deu.traineddata.gz'
 ];
 

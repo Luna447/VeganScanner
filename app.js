@@ -78,12 +78,18 @@ async function runScan(){
   const url = URL.createObjectURL(file);
   try {
     const { createWorker } = Tesseract;
-    const worker = await createWorker({ logger: m => {/* optional Progress */}, workerPath: 'tesseract/tesseract.worker.min.js', langPath: 'tesseract', corePath: 'tesseract/tesseract-core.wasm' });
-    await worker.loadLanguage(OCR_LANG);
-    await worker.initialize(OCR_LANG);
+    const worker = await createWorker({
+      logger: m => { /* optional Progress */ },
+      workerPath: 'tesseract/worker.min.js',          // korrekt
+      corePath:   'tesseract/tesseract-core.wasm',    // korrekt
+      langPath:   'tesseract/tessdata'                // Ordner mit eng/deu .gz
+    });
+
+    await worker.loadLanguage(OCR_LANG || 'deu+eng');
+    await worker.initialize(OCR_LANG || 'deu+eng');
+
     const { data: { text } } = await worker.recognize(url);
     await worker.terminate();
-    URL.revokeObjectURL(url);
 
     el.ocrText.textContent = text;
 
@@ -93,13 +99,15 @@ async function runScan(){
 
   } catch (e) {
     console.error(e);
-    el.status.textContent = 'Fehler bei der OCR.';
+    el.status.textContent = 'Fehler bei der OCR (prüfe Pfade/Dateien im Ordner tesseract/).';
   } finally {
+    URL.revokeObjectURL(url);
     el.btnScan.disabled = false;
     el.btnRetake.style.display = 'inline-block';
     el.btnReset.style.display = 'inline-block';
   }
 }
+
 
 function analyze(text, data) {
   if(!data) return { verdict:'Unklar', hitsB:[], hitsG:[], eHits:[], unknownTokens:[] };

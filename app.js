@@ -1,3 +1,19 @@
+(async function sanityCheck(){
+  const paths = [
+    'tesseract/worker.min.js',
+    'tesseract/tesseract-core.wasm',
+    'tesseract/tessdata/eng.traineddata.gz',
+    'tesseract/tessdata/deu.traineddata.gz'
+  ];
+  for (const p of paths) {
+    try {
+      const r = await fetch(p, { cache: 'no-store' });
+      console.log(p, r.ok ? 'OK' : ('FAIL '+r.status));
+    } catch(e){ console.error(p,'FAIL',e); }
+  }
+})();
+
+
 /* ============ Konfiguration ============ */
 
 // Optionale Online-Listen (kannst du später auf eigene GitHub Raw URLs zeigen lassen)

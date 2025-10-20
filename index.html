@@ -79,10 +79,9 @@
   <script src="app.js"></script>
 
   <script>
-    // Service Worker registrieren (Pflicht f¨¹r installierbare PWA)
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(console.error);
-    }
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
   </script>
 </body>
 </html>

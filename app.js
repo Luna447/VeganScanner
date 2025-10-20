@@ -3,7 +3,7 @@
     'tesseract/worker.min.js',
     'tesseract/tesseract-core-220.wasm',   // <— hier auch
     'tesseract/tessdata/eng.traineddata.gz',
-    'tesseract/tessdata/deu.traineddata.gz'
+    'tesseract/tessdata/deu.traineddata.gz',
     'tesseract/tesseract-core.wasm.js',
     'tesseract/tesseract-core.wasm',
   ]) {

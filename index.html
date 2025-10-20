@@ -75,13 +75,9 @@
   </main>
 
   <!-- Tesseract lokal -->
-  <script src="tesseract/tesseract.min.js"></script> 
+  <script src="tesseract/tesseract.min.js"></script>
   <script src="app.js"></script>
-
-  <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js');
-  }
-  </script>
+  <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js')}</script>
+  
 </body>
 </html>

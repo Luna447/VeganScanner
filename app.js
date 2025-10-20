@@ -1,21 +1,17 @@
+// sanityCheck:
 (async function sanityCheck(){
-  const paths = [
+  for (const p of [
+    'tesseract/tesseract.min.js',
     'tesseract/worker.min.js',
-    'tesseract/tessdata/eng.traineddata.gz',
-    'tesseract/tessdata/deu.traineddata.gz',
     'tesseract/tesseract-core.wasm.js',
-    'tesseract/tesseract-core.wasm'
-  ];
-  for (const p of paths) {
-    try {
-      const r = await fetch(p, { cache: 'no-store' });
-      console.log(p, r.ok ? 'OK' : ('FAIL ' + r.status));
-    } catch (e) {
-      console.log(p, 'FAIL', e);
-    }
+    'tesseract/tesseract-core.wasm',
+    'tesseract/tessdata/eng.traineddata.gz',
+    'tesseract/tessdata/deu.traineddata.gz'
+  ]) {
+    const r = await fetch(p, { cache: 'no-store' });
+    console.log(p, r.ok ? 'OK' : ('FAIL ' + r.status));
   }
 })();
-
 
 
 /* ============ Konfiguration ============ */
@@ -88,10 +84,11 @@ function resetUI(){
   LAST_SCAN = null;
 }
 
+// beim Scannen:
 async function runScan() {
   const file = el.file.files?.[0];
   if (!file){ el.status.textContent = 'Kein Bild gewählt.'; return; }
-  if (file.type && file.type.toLowerCase().includes('heic')) {
+  if (file.type?.toLowerCase().includes('heic')) {
     el.status.textContent = 'HEIC nicht unterstützt. Bitte JPG/PNG nutzen.'; return;
   }
 
@@ -104,7 +101,7 @@ async function runScan() {
 
     const base = new URL(document.baseURI);
     const workerPath = new URL('tesseract/worker.min.js', base).href;              // 2.1.5
-    const corePath   = new URL('tesseract/tesseract-core.wasm.js', base).href;     // <-- WICHTIG: .wasm.js
+    const corePath   = new URL('tesseract/tesseract-core.wasm.js', base).href;     // 2.2.0 WRAPPER
     const langPath   = new URL('tesseract/tessdata/', base).href;
 
     const worker = await createWorker({ logger: m => console.log(m), workerPath, corePath, langPath });
@@ -129,8 +126,6 @@ async function runScan() {
     el.btnReset.style.display = 'inline-block';
   }
 }
-
-
 
 
 function analyze(text, data) {

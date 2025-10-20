@@ -1,5 +1,6 @@
 const $ = s => document.querySelector(s);
-const statusEl = $('#status'), ocrOut = $('#ocrOut');
+const statusEl = $('#status');
+const ocrOut = $('#ocrOut');
 const setStatus = m => { statusEl.textContent = m || ''; console.log('[Status]', m); };
 
 let worker;
@@ -8,7 +9,6 @@ async function ensureWorker() {
   if (worker) return worker;
 
   worker = Tesseract.createWorker({
-    // harte, relative Pfade – keine Querystrings, keine Module
     workerPath: 'vendor/tesseract/worker.min.js',
     corePath:   'vendor/tesseract/tesseract-core.wasm.js',
     langPath:   'vendor/tesseract/lang',
@@ -17,11 +17,9 @@ async function ensureWorker() {
 
   setStatus('Lade OCR-Worker…');
   await worker.load();
-  setStatus('Lade Sprachdaten…');
+  setStatus('Lade Sprachdaten (deu+eng)…');
   await worker.loadLanguage('deu+eng');
   await worker.initialize('deu+eng');
-
-  console.log('Tesseract version:', Tesseract.version);
   setStatus('Bereit.');
   return worker;
 }
@@ -35,19 +33,19 @@ async function doOCR(file) {
   return data.text || '';
 }
 
-$('#scanBtn').addEventListener('click', async () => {
+document.getElementById('scanBtn').addEventListener('click', async () => {
   try {
-    const file = $('#file').files[0];
+    const file = document.getElementById('file').files[0];
     const text = await doOCR(file);
-    ocrOut.textContent = text.trim();
+    ocrOut.textContent = (text || '').trim();
   } catch (e) {
     setStatus('Fehler: ' + e.message);
     console.error(e);
   }
 });
 
-$('#resetBtn').addEventListener('click', () => {
-  $('#file').value = '';
+document.getElementById('resetBtn').addEventListener('click', () => {
+  document.getElementById('file').value = '';
   ocrOut.textContent = '';
   setStatus('');
 });

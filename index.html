@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vegan Scanner</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f766e">
+
+  <style>
+    html,body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial; background:#0b1212; color:#e6f2ef; }
+    header { padding:16px; background:#0f766e; color:#fff; font-weight:700; }
+    main { padding:16px; display:grid; gap:12px; max-width:820px; margin:0 auto; }
+    .card { background:#121a1a; border:1px solid #163b39; border-radius:14px; padding:14px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    button, .btn {
+      background:#0f766e; color:#fff; border:0; padding:10px 12px; border-radius:10px; font-weight:600;
+    }
+    button:disabled { opacity:.6 }
+    input[type=file]{ border:1px dashed #2a4a47; padding:12px; border-radius:10px; background:#0f1313; color:#cfe7e3; width:100%;}
+    .badge { display:inline-block; padding:6px 10px; border-radius:999px; font-weight:700; }
+    .ok { background:#144d3b; color:#b7f5d9; }
+    .warn { background:#4d3a14; color:#ffe8b7; }
+    .bad { background:#4d1414; color:#ffb7b7; }
+    pre { white-space:pre-wrap; word-wrap:break-word; background:#0a1010; padding:12px; border-radius:10px; border:1px solid #163b39; max-height:38vh; overflow:auto; }
+    .small { opacity:.8; font-size:.9rem }
+    .pill { font-size:.85rem; padding:4px 8px; border:1px solid #2a4a47; border-radius:999px; margin:2px; display:inline-block; }
+  </style>
+</head>
+<body>
+  <header>Vegan-Check (offline + hybrid)</header>
+
+  <main>
+    <section class="card">
+      <div class="row">
+        <input id="fileInput" type="file" accept="image/*" capture="environment">
+        <button id="btnScan">Scannen</button>
+        <button id="btnRetake" style="display:none;">Neues Foto</button>
+      </div>
+      <div id="status" class="small">Bereit. Foto ausw?hlen und ?Scannen¡°.</div>
+    </section>
+
+    <section class="card">
+      <div class="row"><strong>Ergebnis:</strong> <span id="verdict" class="badge ok" style="display:none;"></span></div>
+      <div id="details" class="small"></div>
+      <div class="row" style="margin-top:8px;">
+        <button id="btnOnline" style="display:none;">Online pr¨¹fen & Liste erweitern</button>
+        <button id="btnReset" style="display:none;">Zur¨¹cksetzen</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <details>
+        <summary>Zutaten-Text (OCR)</summary>
+        <pre id="ocrText"></pre>
+      </details>
+      <details>
+        <summary>Treffer</summary>
+        <div><strong>Blacklist:</strong> <div id="hitB"></div></div>
+        <div style="margin-top:6px;"><strong>Greylist:</strong> <div id="hitG"></div></div>
+        <div style="margin-top:6px;"><strong>E-Nummern:</strong> <div id="hitE"></div></div>
+      </details>
+    </section>
+
+    <section class="card small">
+      <strong>Hinweise:</strong>
+      <ul>
+        <li>Offline-Scan: lokal per OCR und lokaler Zutatenliste.</li>
+        <li>Online-Pr¨¹fung l?dt zus?tzliche Zutatenlisten (konfigurierbar) und versucht die Entscheidung zu pr?zisieren.</li>
+        <li>?Unklar¡° hei?t: potenziell vegan, aber unsichere Bestandteile wie E471/E472, D3, ?Aroma¡° etc.</li>
+      </ul>
+    </section>
+  </main>
+
+  <!-- Tesseract lokal -->
+  <script src="tesseract/tesseract.min.js"></script>
+  <script src="app.js"></script>
+
+  <script>
+    // Service Worker registrieren (Pflicht f¨¹r installierbare PWA)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(console.error);
+    }
+  </script>
+</body>
+</html>

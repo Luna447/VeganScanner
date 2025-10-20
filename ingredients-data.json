@@ -1,0 +1,45 @@
+{
+  "blacklist": [
+    "gelatine","fischgelatine","kollagen","kasein","casein","kaseinat",
+    "laktose","molke","whey","eiklar","eiweiß","eiweiss","eipulver",
+    "milch","vollmilchpulver","magermilchpulver","butter","butterreinfett",
+    "rahm","sahne","käse","kaese","quark","joghurt","lab","tierisches lab",
+    "honig","bienenwachs","propolis","schellack","karmin","cochenille",
+    "e120","ghee","schweineschmalz","schmalz","rindertalg","talg",
+    "gelée royale","gelee royale","fisch","krebstiere","krustentiere",
+    "austern","muscheln","shirako","鱼胶","魚膠"
+  ],
+  "greylist": [
+    "vitamin d3","d3","omega-3","lecithin","lecithine","e322","aroma","aromen",
+    "emulgator","stabilisator","trennmittel","farbstoff","farbmittel",
+    "mono- und diglyceride","monoglyceride","diglyceride","e471","e472",
+    "fettsäuren","glycerin","glycerol","e422","l-cystein","cystein",
+    "labersatz","kultur","kulturen","starterkultur"
+  ],
+  "enumbers": {
+    "e120": "not_vegan",
+    "e322": "maybe",
+    "e422": "maybe",
+    "e432": "maybe",
+    "e433": "maybe",
+    "e434": "maybe",
+    "e435": "maybe",
+    "e436": "maybe",
+    "e441": "not_vegan",
+    "e470": "maybe",
+    "e470a": "maybe",
+    "e470b": "maybe",
+    "e471": "maybe",
+    "e472": "maybe",
+    "e472a": "maybe",
+    "e472b": "maybe",
+    "e472c": "maybe",
+    "e472d": "maybe",
+    "e472e": "maybe",
+    "e472f": "maybe",
+    "e476": "maybe",
+    "e481": "maybe",
+    "e482": "maybe",
+    "e904": "not_vegan"
+  }
+}

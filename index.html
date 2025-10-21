@@ -1,65 +1,69 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAWlBMVEUAAAD///////////////////////////////////////////////////////////////////////////////////////////////////8rEixlAAAAH3RSTlMAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyEjrUc6AAAAQ0lEQVQYV2NgAAKMDIxMjEwMLAzEwMDIxMjY0NjE0NjIwNDAwNDM0NDAyNzA0NDAwNjAwNjEwMDQ0MDAwAAAzRgMMzQe2ywAAAABJRU5ErkJggg==" type="image/png">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Vegan Scanner</title>
+  <title>VeganScanner</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/VeganScanner/manifest.webmanifest">
   <meta name="theme-color" content="#0f766e">
+
+  <!-- App-Styles, bewusst inline, damit App-Shell sofort steht -->
   <style>
-    html,body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Helvetica Neue,Arial;background:#0b1212;color:#e6f2ef}
-    header{padding:16px;background:#0f766e;color:#fff;font-weight:700}
-    main{padding:16px;max-width:860px;margin:auto;display:grid;gap:12px}
-    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    button{background:#0f766e;color:#fff;border:0;padding:10px 14px;border-radius:8px;cursor:pointer}
-    details{background:#0e1a19;border:1px solid #123534;border-radius:10px;padding:10px}
-    pre{white-space:pre-wrap;word-break:break-word;background:#091212;padding:12px;border-radius:8px}
-    .muted{opacity:.8;font-size:.9rem}
+    :root { color-scheme: dark; }
+    html,body { margin:0; background:#0b1212; color:#e6f2ef; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial; }
+    header { padding:16px; background:#0f766e; color:#fff; font-weight:700; }
+    main { padding:16px; display:grid; gap:14px; max-width:920px; margin:0 auto; }
+    .card { background:#0f1414; border:1px solid #0f2a28; border-radius:14px; padding:14px; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    input[type=file] { accent-color:#0f766e; }
+    button { background:#16a394; border:0; color:#071010; padding:10px 14px; border-radius:10px; font-weight:700; cursor:pointer; }
+    button[disabled]{ opacity:.5; cursor:not-allowed; }
+    progress { width:220px; height:10px; }
+    .thumbs { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; }
+    .thumbs img{ width:100%; height:100px; object-fit:cover; border-radius:8px; border:1px solid #113; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px; white-space:pre-wrap; word-break:break-word; }
+    .muted { opacity:.75 }
+    .ok { color:#9ff2d5 }
+    .err { color:#ff9ea8 }
   </style>
+
+  <!-- Tesseract Loader (lokal) -->
+  <script src="/VeganScanner/vendor/tesseract/tesseract.min.js" defer></script>
+  <!-- App -->
+  <script src="/VeganScanner/app.js" type="module" defer></script>
 </head>
 <body>
-  <header>Vegan-Check (offline + hybrid)</header>
+  <header>VeganScanner · OCR</header>
   <main>
-    <div class="row">
-      <input id="file" type="file" accept="image/*">
-      <button id="scanBtn">Scannen</button>
-      <button id="resetBtn">Zurücksetzen</button>
-      <span id="status" class="muted"></span>
-    </div>
+    <section class="card">
+      <div class="row">
+        <input id="file" type="file" accept="image/*" multiple>
+        <button id="scan" disabled>Scannen</button>
+        <progress id="prog" value="0" max="1" hidden></progress>
+        <span id="status" class="muted mono"></span>
+      </div>
+      <div id="thumbs" class="thumbs"></div>
+    </section>
 
-    <details>
-      <summary>Zutaten-Text (OCR)</summary>
-      <pre id="ocrOut"></pre>
-    </details>
+    <section class="card">
+      <h3>Ergebnis</h3>
+      <pre id="out" class="mono"></pre>
+    </section>
 
-    <details>
-      <summary>Treffer</summary>
-      <pre id="hitsOut">Noch keine Logik hier. Erst OCR reparieren, danach Regeln.</pre>
-    </details>
-
-    <p class="muted">Hinweis: OCR läuft lokal. Sprachdaten liegen im Projekt.</p>
+    <section class="card">
+      <h3>Diagnose</h3>
+      <pre id="log" class="mono"></pre>
+    </section>
   </main>
 
-  <!-- Einmaliger Cleanup -->
   <script>
-    (async () => {
-      try {
-        if ('serviceWorker' in navigator) {
-          const regs = await navigator.serviceWorker.getRegistrations();
-          for (const r of regs) await r.unregister();
-        }
-        if (window.caches) {
-          const keys = await caches.keys();
-          for (const k of keys) await caches.delete(k);
-        }
-        console.log('[Cleanup] SW & Cache geleert');
-      } catch(e) { console.warn('[Cleanup] Problem:', e); }
-    })();
+    // Service Worker Registration mit Versionsbump
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/VeganScanner/sw.js')
+        .catch(e => console.warn('SW fail', e));
+    }
   </script>
-
-<!-- index.html: feste Version + Mini-Cachebuster -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js?v=505"></script>
-<script src="app.nov.js?v=505" defer></script>
-
 </body>
 </html>

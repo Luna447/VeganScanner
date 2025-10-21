@@ -40,9 +40,23 @@ function renderThumbs() {
   });
 }
 
+async function ensureLibrary() {
+  if (typeof window.Tesseract !== 'undefined') return;
+  // Wenn index.html-Fallback noch nicht gegriffen hat, lade CDN dynamisch.
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('tesseract.min.js konnte nicht geladen werden'));
+    document.head.appendChild(s);
+  });
+}
+
 async function ensureWorker() {
+  await ensureLibrary();
+  if (!window.Tesseract) throw new Error('Tesseract nicht geladen');
+
   if (worker) return worker;
-  if (typeof Tesseract === 'undefined') throw new Error('Tesseract nicht geladen');
 
   // Wichtig: workerBlobURL:false und corePath als Ordner
   worker = Tesseract.createWorker({
@@ -105,9 +119,14 @@ window.addEventListener('load', async () => {
       log('check', p, r.status, len);
       return +len || 0;
     };
+    // Zeig mir, dass die drei Brocken da sind:
     await check('vendor/tesseract/worker.min.js');
     await check('vendor/tesseract/tesseract-core.wasm.js');
     await check('vendor/tesseract/tesseract-core.wasm');
+
+    // Und prüf, ob die Lib im Fenster existiert:
+    setTimeout(() => log('Tesseract?', typeof window.Tesseract), 200);
+
     setStatus('Bereit.');
   } catch (e) {
     log('Self-check failed', e);

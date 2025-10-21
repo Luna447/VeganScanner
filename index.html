@@ -29,8 +29,11 @@
     .err { color:#ff9ea8 }
   </style>
 
-  <!-- Tesseract Loader (lokal) -->
-  <script src="vendor/tesseract/tesseract.min.js" defer></script>
+  <!-- Tesseract-Hauptbibliothek: lokal, mit CDN-Fallback -->
+  <script src="vendor/tesseract/tesseract.min.js"
+          onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';document.head.appendChild(s);}())"
+          defer></script>
+
   <!-- App -->
   <script src="app.js" type="module" defer></script>
 </head>

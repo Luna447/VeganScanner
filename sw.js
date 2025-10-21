@@ -1,5 +1,5 @@
 // Root-Setup. Wenn du an vendor-Dateien drehst: VERSION hochzählen.
-const VERSION = 'v16';
+const VERSION = 'v2025-10-21h';
 
 const APP_SHELL = [
   'index.html',
@@ -33,20 +33,17 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Sprachmodelle: networkThenCache
   if (url.pathname.includes('/vendor/tesseract/lang/')) {
     e.respondWith(networkThenCache(e.request));
     return;
   }
 
-  // App-Shell: cache-first
-  const isShell = APP_SHELL.some(p => url.pathname.endsWith('/' + p) || url.pathname === '/' && p === 'index.html');
+  const isShell = APP_SHELL.some(p =>
+    url.pathname.endsWith('/' + p) || (url.pathname === '/' && p === 'index.html'));
   if (isShell) {
     e.respondWith(cacheFirst(e.request));
     return;
   }
-
-  // Rest: Durchlassen
 });
 
 async function cacheFirst(req) {

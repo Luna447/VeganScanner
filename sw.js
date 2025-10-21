@@ -1,5 +1,5 @@
 // Root-Setup. Wenn du an vendor-Dateien drehst: VERSION hochzählen.
-const VERSION = 'v2025-10-21d';
+const VERSION = 'v16';
 
 const APP_SHELL = [
   'index.html',

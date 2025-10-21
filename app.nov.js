@@ -1,21 +1,5 @@
-// 1. Cache und Service Worker löschen, damit alte Worker/Dateien verschwinden
-(async () => {
-  try {
-    if ('serviceWorker' in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for (const r of regs) await r.unregister();
-    }
-    if (window.caches) {
-      const keys = await caches.keys();
-      for (const k of keys) await caches.delete(k);
-    }
-    console.log('[Cleanup] Alte Service Worker und Cache gelöscht.');
-  } catch (e) {
-    console.warn('[Cleanup] Fehler beim Bereinigen:', e);
-  }
-})();
+console.log('[Startup] App init');
 
-// 2. Ab hier dein regulärer OCR-Code
 const $ = s => document.querySelector(s);
 const statusEl = $('#status');
 const ocrOut = $('#ocrOut');
@@ -28,16 +12,18 @@ async function ensureWorker() {
 
   worker = await Tesseract.createWorker({
     workerPath: '/VeganScanner/vendor/tesseract/worker.min.js',
-    corePath:   '/VeganScanner/vendor/tesseract/tesseract-core.wasm.js',
+    corePath:   '/VeganScanner/vendor/tesseract/tesseract-core-wasm.js', // MONOLITH: Bindestrich-Datei (~4.6 MB)
     langPath:   '/VeganScanner/vendor/tesseract/lang',
     logger: m => console.log('[tess]', m.status || m.progress || m)
   });
 
   setStatus('Lade OCR-Worker…');
   await worker.load();
+
   setStatus('Lade Sprachdaten (deu+eng)…');
   await worker.loadLanguage('deu+eng');
   await worker.initialize('deu+eng');
+
   setStatus('Bereit.');
   return worker;
 }
@@ -57,7 +43,7 @@ document.getElementById('scanBtn').addEventListener('click', async () => {
     const text = await doOCR(file);
     ocrOut.textContent = (text || '').trim();
   } catch (e) {
-    setStatus('Fehler: ' + e.message);
+    setStatus('Fehler: ' + (e?.message || String(e)));
     console.error(e);
   }
 });
@@ -68,6 +54,6 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   setStatus('');
 });
 
-window.addEventListener('beforeunload', async () => {
-  try { if (worker) await worker.terminate(); } catch {}
+window.addEventListener('beforeunload', () => {
+  try { worker?.terminate(); } catch {}
 });

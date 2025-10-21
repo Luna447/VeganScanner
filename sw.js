@@ -1,16 +1,21 @@
-// Root-Setup. Wenn du an vendor-Dateien drehst: VERSION hochzählen.
-const VERSION = 'v2025-10-21h';
+// SW: Version heben, wenn du irgendwas an vendor/tesseract änderst
+const VERSION = 'v2025-10-21k';
 
 const APP_SHELL = [
   'index.html',
   'app.js',
   'manifest.webmanifest',
+  'icons/icon-192.png',
+  'icons/icon-512.png',
+
+  // Tesseract-Dateien
   'vendor/tesseract/tesseract.min.js',
   'vendor/tesseract/worker.min.js',
   'vendor/tesseract/tesseract-core.wasm.js',
   'vendor/tesseract/tesseract-core.wasm',
-  'icons/icon-192.png',
-  'icons/icon-512.png',
+  'vendor/tesseract/tesseract-core-simd.wasm',
+  'vendor/tesseract/tesseract-core-lstm.wasm',
+  'vendor/tesseract/tesseract-core-simd-lstm.wasm',
 ];
 
 self.addEventListener('install', e => {
@@ -29,7 +34,7 @@ self.addEventListener('activate', e => {
   })());
 });
 
-// Strategie: App-Shell cache-first, Sprachdaten network-first mit Fallback.
+// Sprachdaten: network-first, Rest: cache-first
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
@@ -40,9 +45,9 @@ self.addEventListener('fetch', e => {
 
   const isShell = APP_SHELL.some(p =>
     url.pathname.endsWith('/' + p) || (url.pathname === '/' && p === 'index.html'));
+
   if (isShell) {
     e.respondWith(cacheFirst(e.request));
-    return;
   }
 });
 

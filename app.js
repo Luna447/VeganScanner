@@ -1,4 +1,4 @@
-// Minimal robuste App-Logik ohne Blob-Worker-Drama.
+// app.js
 const els = {
   file:   document.getElementById('file'),
   scan:   document.getElementById('scan'),
@@ -9,7 +9,7 @@ const els = {
   log:    document.getElementById('log'),
 };
 
-let worker = null;
+let ocrWorker = null;
 let files = [];
 
 function log(...args) {
@@ -40,43 +40,52 @@ function renderThumbs() {
   });
 }
 
+// Falls das lokale Script fehlschlug: gleiches Major (v5) vom CDN nachladen
 async function ensureLibrary() {
   if (typeof window.Tesseract !== 'undefined') return;
-  // Wenn index.html-Fallback noch nicht gegriffen hat, lade CDN dynamisch.
   await new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
     s.onload = resolve;
     s.onerror = () => reject(new Error('tesseract.min.js konnte nicht geladen werden'));
     document.head.appendChild(s);
   });
 }
 
+// Wichtiger Teil: corePath zeigt auf die .wasm.js, nicht nur den Ordner.
+// Logger NICHT als Option mitgeben, sondern global setzen.
+const paths = {
+  workerPath: 'vendor/tesseract/worker.min.js',
+  corePath:   'vendor/tesseract/tesseract-core.wasm.js',
+  langPath:   'vendor/tesseract/lang'
+};
+
+Tesseract.setLogger(m => {
+  if (m.progress != null) els.prog.value = m.progress;
+  if (m.status) els.status.textContent = m.status;
+  if (m.progress != null || m.status) log('[tess]', m.status || '', m.progress ?? '');
+});
+
 async function ensureWorker() {
   await ensureLibrary();
   if (!window.Tesseract) throw new Error('Tesseract nicht geladen');
 
-  if (worker) return worker;
+  if (ocrWorker) return ocrWorker;
 
-  // Wichtig: workerBlobURL:false und corePath als Ordner
-  worker = Tesseract.createWorker({
-    workerPath: 'vendor/tesseract/worker.min.js',
-    corePath:   'vendor/tesseract/',
-    langPath:   'vendor/tesseract/lang',
-    workerBlobURL: false,
-    logger: m => {
-      if (m.progress != null) {
-        els.prog.value = m.progress;
-      }
-      log('[tess]', m.status || '', m.progress ?? '');
-    },
+  const w = Tesseract.createWorker({
+    workerPath: paths.workerPath,
+    corePath:   paths.corePath,
+    langPath:   paths.langPath,
+    workerBlobURL: false
   });
 
-  await worker.load();
-  await worker.loadLanguage('deu+eng');
-  await worker.initialize('deu+eng');
+  await w.load();
+  await w.loadLanguage('deu+eng');
+  await w.initialize('deu+eng');
+
+  ocrWorker = w;
   log('Worker bereit');
-  return worker;
+  return w;
 }
 
 els.file.addEventListener('change', () => {
@@ -110,7 +119,7 @@ els.scan.addEventListener('click', async () => {
   }
 });
 
-// Selbsttest beim Laden
+// Selbsttest
 window.addEventListener('load', async () => {
   try {
     const check = async (p) => {
@@ -119,14 +128,11 @@ window.addEventListener('load', async () => {
       log('check', p, r.status, len);
       return +len || 0;
     };
-    // Zeig mir, dass die drei Brocken da sind:
-    await check('vendor/tesseract/worker.min.js');
-    await check('vendor/tesseract/tesseract-core.wasm.js');
-    await check('vendor/tesseract/tesseract-core.wasm');
+    await check(paths.workerPath);
+    await check(paths.corePath);
+    await check('vendor/tesseract/tesseract-core.wasm'); // eine der Varianten
 
-    // Und prüf, ob die Lib im Fenster existiert:
     setTimeout(() => log('Tesseract?', typeof window.Tesseract), 200);
-
     setStatus('Bereit.');
   } catch (e) {
     log('Self-check failed', e);
@@ -134,5 +140,5 @@ window.addEventListener('load', async () => {
 });
 
 window.addEventListener('beforeunload', async () => {
-  try { if (worker) await worker.terminate(); } catch {}
+  try { if (ocrWorker) await ocrWorker.terminate(); } catch {}
 });

@@ -8,8 +8,8 @@
   <!-- PWA -->
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#0f766e">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
 
-  <!-- App-Styles, bewusst inline, damit App-Shell sofort steht -->
   <style>
     :root { color-scheme: dark; }
     html,body { margin:0; background:#0b1212; color:#e6f2ef; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial; }
@@ -30,9 +30,9 @@
   </style>
 
   <!-- Tesseract Loader (lokal) -->
-  <script src="/VeganScanner/vendor/tesseract/tesseract.min.js" defer></script>
+  <script src="vendor/tesseract/tesseract.min.js" defer></script>
   <!-- App -->
-  <script src="/VeganScanner/app.js" type="module" defer></script>
+  <script src="app.js" type="module" defer></script>
 </head>
 <body>
   <header>VeganScanner · OCR</header>
@@ -59,9 +59,8 @@
   </main>
 
   <script>
-    // Service Worker Registration mit Versionsbump
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/VeganScanner/sw.js')
+      navigator.serviceWorker.register('sw.js')
         .catch(e => console.warn('SW fail', e));
     }
   </script>

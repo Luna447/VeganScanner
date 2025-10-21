@@ -46,9 +46,9 @@ async function ensureWorker() {
 
   // Wichtig: workerBlobURL:false und corePath als Ordner
   worker = Tesseract.createWorker({
-    workerPath: '/VeganScanner/vendor/tesseract/worker.min.js',
-    corePath:   '/VeganScanner/vendor/tesseract/',
-    langPath:   '/VeganScanner/vendor/tesseract/lang',
+    workerPath: 'vendor/tesseract/worker.min.js',
+    corePath:   'vendor/tesseract/',
+    langPath:   'vendor/tesseract/lang',
     workerBlobURL: false,
     logger: m => {
       if (m.progress != null) {
@@ -80,7 +80,6 @@ els.scan.addEventListener('click', async () => {
 
   try {
     const w = await ensureWorker();
-    // seriell verarbeiten: stabiler und speichersparend
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       setStatus(`Scanne ${i+1}/${files.length}: ${f.name}`, 'ok');
@@ -97,7 +96,7 @@ els.scan.addEventListener('click', async () => {
   }
 });
 
-// Kleiner Selbsttest-Button? Nee, machen wir automatisch beim Laden.
+// Selbsttest beim Laden
 window.addEventListener('load', async () => {
   try {
     const check = async (p) => {
@@ -106,16 +105,15 @@ window.addEventListener('load', async () => {
       log('check', p, r.status, len);
       return +len || 0;
     };
-    await check('/VeganScanner/vendor/tesseract/worker.min.js');
-    await check('/VeganScanner/vendor/tesseract/tesseract-core.wasm.js');
-    await check('/VeganScanner/vendor/tesseract/tesseract-core.wasm');
+    await check('vendor/tesseract/worker.min.js');
+    await check('vendor/tesseract/tesseract-core.wasm.js');
+    await check('vendor/tesseract/tesseract-core.wasm');
     setStatus('Bereit.');
   } catch (e) {
     log('Self-check failed', e);
   }
 });
 
-// Aufräumen beim Verlassen (nicht kritisch, aber nett)
 window.addEventListener('beforeunload', async () => {
   try { if (worker) await worker.terminate(); } catch {}
 });

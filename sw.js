@@ -1,22 +1,22 @@
-// Simpler App-Shell-SW mit Versionierung. Wenn du an vendor-Dateien drehst, VERSION hochzählen.
-const VERSION = 'v2025-10-21a';
+// Root-Setup. Wenn du an vendor-Dateien drehst: VERSION hochzählen.
+const VERSION = 'v2025-10-21d';
+
 const APP_SHELL = [
-  '/VeganScanner/',
-  '/VeganScanner/index.html',
-  '/VeganScanner/app.js',
-  '/VeganScanner/manifest.webmanifest',
-  '/VeganScanner/vendor/tesseract/tesseract.min.js',
-  '/VeganScanner/vendor/tesseract/worker.min.js',
-  '/VeganScanner/vendor/tesseract/tesseract-core.wasm.js',
-  '/VeganScanner/vendor/tesseract/tesseract-core.wasm',
-  '/VeganScanner/icons/icon-192.png',
-  '/VeganScanner/icons/icon-512.png',
+  'index.html',
+  'app.js',
+  'manifest.webmanifest',
+  'vendor/tesseract/tesseract.min.js',
+  'vendor/tesseract/worker.min.js',
+  'vendor/tesseract/tesseract-core.wasm.js',
+  'vendor/tesseract/tesseract-core.wasm',
+  'icons/icon-192.png',
+  'icons/icon-512.png',
 ];
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(VERSION);
-    await c.addAll(APP_SHELL);
+    try { await c.addAll(APP_SHELL); } catch(e) { /* dev server darf auch mal zicken */ }
     self.skipWaiting();
   })());
 });
@@ -29,21 +29,24 @@ self.addEventListener('activate', e => {
   })());
 });
 
-// Strategie: App-Shell cache-first, Sprachdaten und Bilder network-first mit Fallback.
+// Strategie: App-Shell cache-first, Sprachdaten network-first mit Fallback.
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Nur unsere App managen
-  if (!url.pathname.startsWith('/VeganScanner/')) return;
-
-  // Große Sprachdateien nicht precachen, aber nachladen + cachen
+  // Sprachmodelle: networkThenCache
   if (url.pathname.includes('/vendor/tesseract/lang/')) {
     e.respondWith(networkThenCache(e.request));
     return;
   }
 
-  // Default: cache-first
-  e.respondWith(cacheFirst(e.request));
+  // App-Shell: cache-first
+  const isShell = APP_SHELL.some(p => url.pathname.endsWith('/' + p) || url.pathname === '/' && p === 'index.html');
+  if (isShell) {
+    e.respondWith(cacheFirst(e.request));
+    return;
+  }
+
+  // Rest: Durchlassen
 });
 
 async function cacheFirst(req) {
@@ -51,7 +54,6 @@ async function cacheFirst(req) {
   const hit = await cache.match(req, { ignoreVary:true, ignoreSearch:true });
   if (hit) return hit;
   const res = await fetch(req);
-  // wasms und js ruhig cachen
   cache.put(req, res.clone());
   return res;
 }

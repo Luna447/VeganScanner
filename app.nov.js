@@ -10,12 +10,12 @@ let worker;
 async function ensureWorker() {
   if (worker) return worker;
 
-  worker = await Tesseract.createWorker({
-    workerPath: '/VeganScanner/vendor/tesseract/worker.min.js',
-    corePath:   '/VeganScanner/vendor/tesseract/tesseract-core-wasm.js', // MONOLITH: Bindestrich-Datei (~4.6 MB)
-    langPath:   '/VeganScanner/vendor/tesseract/lang',
-    logger: m => console.log('[tess]', m.status || m.progress || m)
-  });
+	worker = await Tesseract.createWorker({
+	workerPath: 'vendor/tesseract/worker.min.js',
+	corePath:   'vendor/tesseract/tesseract-core-wasm.js',
+	langPath:   'vendor/tesseract/lang',
+	logger: m => console.log('[tess]', m.status || m.progress || m)
+});
 
   setStatus('Lade OCR-Worker…');
   await worker.load();

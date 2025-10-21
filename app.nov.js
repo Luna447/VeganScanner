@@ -8,13 +8,12 @@ let worker;
 async function ensureWorker() {
   if (worker) return worker;
 
-  const worker = await Tesseract.createWorker({
-	workerPath: '/VeganScanner/vendor/tesseract/worker.min.js',
-	corePath:   '/VeganScanner/vendor/tesseract/tesseract-core.wasm.js',
-	langPath:   '/VeganScanner/vendor/tesseract/lang',
-	logger: m => console.log('[tess]', m.status || m.progress || m)
-});
-
+  worker = await Tesseract.createWorker({
+    workerPath: '/VeganScanner/vendor/tesseract/worker.min.js',
+    corePath:   '/VeganScanner/vendor/tesseract/tesseract-core.wasm.js',
+    langPath:   '/VeganScanner/vendor/tesseract/lang',
+    logger: m => console.log('[tess]', m.status || m.progress || m)
+  });
 
   setStatus('Lade OCR-Worker…');
   await worker.load();
@@ -24,6 +23,7 @@ async function ensureWorker() {
   setStatus('Bereit.');
   return worker;
 }
+
 
 async function doOCR(file) {
   if (!file) throw new Error('Keine Datei ausgewählt');

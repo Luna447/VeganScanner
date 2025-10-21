@@ -1,3 +1,4 @@
-/* worker.patched.js — zwingt einen sauberen corePath bevor der Minified-Worker läuft */
-self.version = '/VeganScanner/vendor/tesseract/tesseract-core.wasm.js';
-importScripts('/VeganScanner/vendor/tesseract/worker.min.js');
+// worker.patched.js
+const BASE = 'https://luna447.github.io/VeganScanner/vendor/tesseract/';
+self.version = BASE + 'tesseract-core.wasm.js';
+importScripts(BASE + 'worker.min.js');

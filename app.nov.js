@@ -11,11 +11,10 @@ async function ensureWorker() {
   if (worker) return worker;
 
   worker = await Tesseract.createWorker({
-    workerPath: 'vendor/tesseract/worker.min.js',
-    corePath:   'vendor/tesseract/tesseract-core-wasm.js',
-    langPath:   'vendor/tesseract/lang',
-    // kein Arrow-Function-Logger mehr, das löst DataCloneError aus
-    logger: 'dummy'
+    workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/worker.min.js',
+    corePath:   'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.5/tesseract-core-wasm.js', // Monolith (~4.6 MB)
+    langPath:   'vendor/tesseract/lang', // deine Sprachdaten lokal
+    logger: 'dummy' // keine Funktion hier, sonst DataCloneError
   });
 
   setStatus('Lade OCR-Worker…');

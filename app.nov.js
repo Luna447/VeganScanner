@@ -10,12 +10,13 @@ let worker;
 async function ensureWorker() {
   if (worker) return worker;
 
-	worker = await Tesseract.createWorker({
-	workerPath: 'vendor/tesseract/worker.min.js',
-	corePath:   'vendor/tesseract/tesseract-core-wasm.js',
-	langPath:   'vendor/tesseract/lang',
-	logger: m => console.log('[tess]', m.status || m.progress || m)
-});
+  worker = await Tesseract.createWorker({
+    workerPath: 'vendor/tesseract/worker.min.js',
+    corePath:   'vendor/tesseract/tesseract-core-wasm.js',
+    langPath:   'vendor/tesseract/lang',
+    // kein Arrow-Function-Logger mehr, das löst DataCloneError aus
+    logger: 'dummy'
+  });
 
   setStatus('Lade OCR-Worker…');
   await worker.load();

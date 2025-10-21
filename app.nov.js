@@ -9,7 +9,7 @@ async function ensureWorker() {
   if (worker) return worker;
 
   worker = Tesseract.createWorker({
-    workerPath: '/VeganScanner/vendor/tesseract/worker.patched.js',   // <-- HIER ändern
+    workerPath: '/VeganScanner/vendor/tesseract/worker.patched.js',
     corePath:   'vendor/tesseract/tesseract-core.wasm.js',
     langPath:   'vendor/tesseract/lang',
     logger: m => console.log('[tess]', m)

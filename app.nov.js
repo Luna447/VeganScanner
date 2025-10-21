@@ -1,3 +1,21 @@
+// 1. Cache und Service Worker löschen, damit alte Worker/Dateien verschwinden
+(async () => {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      for (const k of keys) await caches.delete(k);
+    }
+    console.log('[Cleanup] Alte Service Worker und Cache gelöscht.');
+  } catch (e) {
+    console.warn('[Cleanup] Fehler beim Bereinigen:', e);
+  }
+})();
+
+// 2. Ab hier dein regulärer OCR-Code
 const $ = s => document.querySelector(s);
 const statusEl = $('#status');
 const ocrOut = $('#ocrOut');
@@ -23,7 +41,6 @@ async function ensureWorker() {
   setStatus('Bereit.');
   return worker;
 }
-
 
 async function doOCR(file) {
   if (!file) throw new Error('Keine Datei ausgewählt');

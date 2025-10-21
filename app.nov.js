@@ -8,12 +8,13 @@ let worker;
 async function ensureWorker() {
   if (worker) return worker;
 
-  worker = Tesseract.createWorker({
-    workerPath: '/VeganScanner/vendor/tesseract/worker.patched.js',
-    corePath:   'vendor/tesseract/tesseract-core.wasm.js',
-    langPath:   'vendor/tesseract/lang',
-    logger: m => console.log('[tess]', m)
-  });
+  const worker = await Tesseract.createWorker({
+	workerPath: '/VeganScanner/vendor/tesseract/worker.min.js',
+	corePath:   '/VeganScanner/vendor/tesseract/tesseract-core.wasm.js',
+	langPath:   '/VeganScanner/vendor/tesseract/lang',
+	logger: m => console.log('[tess]', m.status || m.progress || m)
+});
+
 
   setStatus('Lade OCR-Worker…');
   await worker.load();

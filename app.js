@@ -107,7 +107,7 @@ async function preprocessImage(file) {
   });
 
   // Aggressiveres Resize: große, komprimierte JPGs werden sonst langsam
-  const maxSide = 1200; // vorher 1500
+  const maxSide = 900; // vorher 1500
   const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
   const w = Math.round(img.width * scale);
   const h = Math.round(img.height * scale);

@@ -56,7 +56,10 @@ async function cacheFirst(req) {
   const hit = await cache.match(req, { ignoreVary:true, ignoreSearch:true });
   if (hit) return hit;
   const res = await fetch(req);
-  cache.put(req, res.clone());
+  // nur ok & nicht opaque cachen
+  if (res && res.ok && res.type !== 'opaque') {
+    try { await cache.put(req, res.clone()); } catch {}
+  }
   return res;
 }
 
@@ -64,7 +67,9 @@ async function networkThenCache(req) {
   const cache = await caches.open(VERSION);
   try {
     const res = await fetch(req);
-    cache.put(req, res.clone());
+    if (res && res.ok && res.type !== 'opaque') {
+      try { await cache.put(req, res.clone()); } catch {}
+    }
     return res;
   } catch {
     const hit = await cache.match(req, { ignoreVary:true, ignoreSearch:true });
@@ -72,3 +77,4 @@ async function networkThenCache(req) {
     throw new Error('Offline und nicht im Cache: ' + req.url);
   }
 }
+

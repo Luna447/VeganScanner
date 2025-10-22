@@ -1,13 +1,13 @@
-/* app.js – VeganScanner (V6.4)
-   - Erzwingt Tesseract v5: wenn lokal falsch/ohne Version => CDN v5 nachladen und überschreiben
+/* app.js – VeganScanner (V6.5)
+   - Erzwingt Tesseract v5 mit Multi-CDN-Fallback (jsDelivr -> unpkg -> cdnjs)
+   - Längeres Timeout, klare Fehlertexte
    - Persistenter Worker (await createWorker)
    - Kein logger im Worker (verhindert DataCloneError)
    - Optional echter % via Tesseract.setLogger, sonst Fake-Ticker
-   - Fortschritt stoppt SOFORT bei Fehlern
+   - Fake-Progress stoppt SOFORT bei Fehlern
    - Preprocessing: Resize + Graustufen + harte Schwelle
 */
 
-// ===== BOOT DIAGNOSE =====
 console.log('[boot] app.js geladen');
 window.addEventListener('error', e => console.error('[JS-Error]', e.message, e.filename + ':' + e.lineno));
 window.addEventListener('unhandledrejection', e => console.error('[Promise-Reject]', e.reason));
@@ -24,8 +24,8 @@ const els = {
 };
 
 let files = [];
-let worker = null;         // persistenter Worker
-let fakeTimer = null;      // Fake-Progress-Ticker
+let worker = null;
+let fakeTimer = null;
 
 // ===== UTIL =====
 function log(...args) {
@@ -84,7 +84,7 @@ function startFakeProgress() {
   fakeTimer = setInterval(() => {
     if (!els.prog) return;
     const v = Number(els.prog.value);
-    if (!Number.isFinite(v)) return;       // indeterminate aktiv
+    if (!Number.isFinite(v)) return; // indeterminate aktiv
     setProgressRatio(Math.min(0.9, (v || 0) + 0.02));
   }, 250);
 }
@@ -101,39 +101,58 @@ const paths = {
   langPath:   'vendor/tesseract/lang'
 };
 
-// ===== v5 GARANTIERT LADEN (überschreibt falsche lokale Builds) =====
+// ===== Helper: Script laden =====
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.referrerPolicy = 'no-referrer';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Script-Load-Error: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+// ===== v5 GARANTIERT LADEN: Multi-CDN =====
 async function ensureTesseractV5() {
-  const isV5 = () => {
+  const okV5 = () => {
     const T = window.Tesseract;
     return T && /^5\./.test(String(T.version || ''));
   };
 
-  // Wenn schon korrekt, fein.
-  if (isV5()) return window.Tesseract;
+  if (okV5()) return window.Tesseract;
 
-  // Wenn irgendwas Falsches oder version==undefined geladen wurde: CDN v5 drüberladen.
-  await new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    // Querystring als Cache-Buster, falls Browser die falsche Datei cached
-    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js?v=5';
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('tesseract.min.js (CDN v5) konnte nicht geladen werden'));
-    document.head.appendChild(s);
-  });
+  // vorhandene, aber falsche globale Lib ignorieren
+  try { if (window.Tesseract && !/^5\./.test(String(window.Tesseract.version || ''))) { window.Tesseract = undefined; } } catch {}
 
-  // Warten bis die globale Variable gesetzt wurde
-  const t0 = performance.now();
-  while (!isV5()) {
-    if (performance.now() - t0 > 8000) {
-      throw new Error('Tesseract v5 wurde nicht initialisiert. Prüfe Netzwerk/Blocker.');
+  const cdns = [
+    'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js?v=5',
+    'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js',
+    // Version auf cdnjs kann variieren; wir nehmen die "5" Major
+    'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.3/tesseract.min.js'
+  ];
+
+  for (const url of cdns) {
+    try {
+      log('[tess] versuche CDN:', url);
+      await loadScript(url);
+      const t0 = performance.now();
+      while (!okV5()) {
+        if (performance.now() - t0 > 15000) throw new Error('Timeout v5 init bei ' + url);
+        await new Promise(r => setTimeout(r, 50));
+      }
+      log('[tess] geladen Version:', window.Tesseract.version);
+      return window.Tesseract;
+    } catch (e) {
+      log('[tess] CDN fehlgeschlagen:', url, e.message || e);
+      // nächster Versuch
     }
-    await new Promise(r => setTimeout(r, 50));
   }
-  console.log('[tess] Version:', window.Tesseract.version);
-  return window.Tesseract;
+
+  throw new Error('Tesseract v5 konnte nicht geladen werden (alle CDNs blockiert?). Prüfe Adblock/CSP/Offline.');
 }
 
-// ===== PREPROCESSING (schneller + stabiler OCR-Input) =====
+// ===== PREPROCESSING =====
 async function preprocessImage(file) {
   const img = await new Promise((resolve, reject) => {
     const i = new Image();
@@ -142,8 +161,7 @@ async function preprocessImage(file) {
     i.src = URL.createObjectURL(file);
   });
 
-  // Aggressives Resize: stell’s auf 900–1200 ein, je nach Qualität/Geschwindigkeit
-  const maxSide = 1000;
+  const maxSide = 1000; // 900–1200 nach Bedarf
   const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
   const w = Math.round(img.width * scale);
   const h = Math.round(img.height * scale);
@@ -153,7 +171,6 @@ async function preprocessImage(file) {
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, w, h);
 
-  // Graustufen + harte Schwelle
   const data = ctx.getImageData(0, 0, w, h);
   const p = data.data;
   for (let i = 0; i < p.length; i += 4) {
@@ -177,12 +194,12 @@ function analyzeIngredients(txt) {
              : 'Vegan-Quickcheck: keine offensichtlichen tierischen Zutaten gefunden';
 }
 
-// ===== Worker-Setup (persistenter Worker, v5-kompatibel) =====
+// ===== Worker-Setup (persistenter Worker) =====
 async function ensureWorker(lang = 'deu') {
   const T = await ensureTesseractV5();
   if (worker) return worker;
 
-  // Globaler Logger (falls vorhanden) liefert echte Prozent, ohne Clone-Fehler
+  // Globaler Logger (echte Prozent), nicht im Worker-Objekt
   try {
     if (typeof T.setLogger === 'function') {
       T.setLogger(m => {
@@ -198,7 +215,6 @@ async function ensureWorker(lang = 'deu') {
     }
   } catch {}
 
-  // In v5 ist createWorker ASYNC. Kein logger im Optionsobjekt!
   worker = await T.createWorker({
     workerPath: paths.workerPath,
     corePath:   paths.corePath,
@@ -242,15 +258,13 @@ async function doScan() {
   const startAll = performance.now();
 
   try {
-    // Standard: nur deutsch für Tempo. Wenn nötig -> 'deu+eng'
-    const lang = 'deu';
+    const lang = 'deu'; // bei Bedarf 'deu+eng'
     const w = await ensureWorker(lang);
 
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       setStatus(`Scanne ${i + 1}/${files.length}: ${f.name}`, 'ok');
 
-      // pro Datei sauber zurücksetzen
       setProgressIndeterminate(true);
       setProgressRatio(0);
 
@@ -276,7 +290,7 @@ async function doScan() {
     console.error(e);
     setStatus('Fehler: ' + e.message, 'err');
     log('ERR', e.stack || e);
-    stopProgress(true); // sofort aus
+    stopProgress(true);
     return;
   } finally {
     setBusy(false);
@@ -300,7 +314,7 @@ window.addEventListener('load', async () => {
     };
     await check(paths.workerPath);
     await check(paths.corePath);
-    await check('vendor/tesseract/tesseract-core.wasm'); // optional
+    await check('vendor/tesseract/tesseract-core.wasm');
     setStatus('Bereit.');
     if (els.scan) els.scan.disabled = files.length === 0;
   } catch (e) {
@@ -308,7 +322,6 @@ window.addEventListener('load', async () => {
   }
 });
 
-// ===== Aufräumen =====
 window.addEventListener('beforeunload', async () => {
   try { await worker?.terminate(); } catch {}
 });

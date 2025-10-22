@@ -29,11 +29,9 @@
   </style>
 
   <!-- Tesseract lokal laden. Fallback auf dieselbe Hauptversion (v5), kein Versionsmix. -->
-  <script src="vendor/tesseract/tesseract.min.js"
-          onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';document.head.appendChild(s);}())"
-          defer></script>
+	<script src="vendor/tesseract/tesseract.min.js" defer></script>
+	<script src="app.js" type="module" defer></script>
 
-  <script src="app.js" type="module" defer></script>
 </head>
 <body>
   <header>VeganScanner · OCR</header>

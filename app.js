@@ -1,10 +1,10 @@
-/* app.js – VeganScanner (V6.5)
-   - Erzwingt Tesseract v5 mit Multi-CDN-Fallback (jsDelivr -> unpkg -> cdnjs)
-   - Längeres Timeout, klare Fehlertexte
+/* app.js – VeganScanner (V6.6, strikt offline)
+   - Lädt NUR lokale Tesseract v5 (vendor/tesseract/tesseract.min.js)
+   - Bricht ab, wenn nicht v5
    - Persistenter Worker (await createWorker)
    - Kein logger im Worker (verhindert DataCloneError)
-   - Optional echter % via Tesseract.setLogger, sonst Fake-Ticker
-   - Fake-Progress stoppt SOFORT bei Fehlern
+   - Optional echter % via Tesseract.setLogger; sonst Fake-Ticker
+   - Fortschritt stoppt SOFORT bei Fehlern
    - Preprocessing: Resize + Graustufen + harte Schwelle
 */
 
@@ -12,7 +12,7 @@ console.log('[boot] app.js geladen');
 window.addEventListener('error', e => console.error('[JS-Error]', e.message, e.filename + ':' + e.lineno));
 window.addEventListener('unhandledrejection', e => console.error('[Promise-Reject]', e.reason));
 
-// ===== DOM HOOKS =====
+// ===== DOM =====
 const els = {
   file:   document.getElementById('file'),
   scan:   document.getElementById('scan'),
@@ -62,7 +62,7 @@ let rafLock = false;
 function setProgressIndeterminate(on) {
   if (!els.prog) return;
   if (on) {
-    els.prog.removeAttribute('value'); // indeterminate
+    els.prog.removeAttribute('value');
     els.prog.max = 1;
   } else {
     els.prog.value = 0;
@@ -94,62 +94,27 @@ function stopProgress(reset = true) {
   if (reset) setProgressRatio(0);
 }
 
-// ===== PFADKONFIG OFFLINE =====
+// ===== PFADKONFIG =====
 const paths = {
   workerPath: 'vendor/tesseract/worker.min.js',
   corePath:   'vendor/tesseract/tesseract-core.wasm.js',
   langPath:   'vendor/tesseract/lang'
 };
 
-// ===== Helper: Script laden =====
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.referrerPolicy = 'no-referrer';
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('Script-Load-Error: ' + src));
-    document.head.appendChild(s);
-  });
-}
-
-// ===== v5 GARANTIERT LADEN: Multi-CDN =====
-async function ensureTesseractV5() {
-  const okV5 = () => {
+// ===== Warte auf lokale v5 =====
+async function waitForLocalV5(timeoutMs = 8000) {
+  const t0 = performance.now();
+  while (true) {
     const T = window.Tesseract;
-    return T && /^5\./.test(String(T.version || ''));
-  };
-
-  if (okV5()) return window.Tesseract;
-
-  // vorhandene, aber falsche globale Lib ignorieren
-  try { if (window.Tesseract && !/^5\./.test(String(window.Tesseract.version || ''))) { window.Tesseract = undefined; } } catch {}
-
-  const cdns = [
-    'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js?v=5',
-    'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js',
-    // Version auf cdnjs kann variieren; wir nehmen die "5" Major
-    'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.3/tesseract.min.js'
-  ];
-
-  for (const url of cdns) {
-    try {
-      log('[tess] versuche CDN:', url);
-      await loadScript(url);
-      const t0 = performance.now();
-      while (!okV5()) {
-        if (performance.now() - t0 > 15000) throw new Error('Timeout v5 init bei ' + url);
-        await new Promise(r => setTimeout(r, 50));
-      }
-      log('[tess] geladen Version:', window.Tesseract.version);
-      return window.Tesseract;
-    } catch (e) {
-      log('[tess] CDN fehlgeschlagen:', url, e.message || e);
-      // nächster Versuch
+    if (T && /^5\./.test(String(T.version || ''))) return T;
+    if (T && !/^5\./.test(String(T.version || ''))) {
+      throw new Error(`Falsche Tesseract-Version (${T.version}). Erwartet v5.x. Ersetze vendor/tesseract/tesseract.min.js durch v5 aus npm.`);
     }
+    if (performance.now() - t0 > timeoutMs) {
+      throw new Error('Tesseract (lokal) nicht geladen. Prüfe <script> in index.html und Caching/ServiceWorker.');
+    }
+    await new Promise(r => setTimeout(r, 50));
   }
-
-  throw new Error('Tesseract v5 konnte nicht geladen werden (alle CDNs blockiert?). Prüfe Adblock/CSP/Offline.');
 }
 
 // ===== PREPROCESSING =====
@@ -161,7 +126,7 @@ async function preprocessImage(file) {
     i.src = URL.createObjectURL(file);
   });
 
-  const maxSide = 1000; // 900–1200 nach Bedarf
+  const maxSide = 1000; // 900–1200 nach Geschmack
   const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
   const w = Math.round(img.width * scale);
   const h = Math.round(img.height * scale);
@@ -194,12 +159,12 @@ function analyzeIngredients(txt) {
              : 'Vegan-Quickcheck: keine offensichtlichen tierischen Zutaten gefunden';
 }
 
-// ===== Worker-Setup (persistenter Worker) =====
+// ===== Worker (persistenter v5) =====
 async function ensureWorker(lang = 'deu') {
-  const T = await ensureTesseractV5();
+  const T = await waitForLocalV5();
   if (worker) return worker;
 
-  // Globaler Logger (echte Prozent), nicht im Worker-Objekt
+  // Echte % nur über globalen Logger, NICHT im Worker-Objekt
   try {
     if (typeof T.setLogger === 'function') {
       T.setLogger(m => {
@@ -221,14 +186,15 @@ async function ensureWorker(lang = 'deu') {
     langPath:   paths.langPath,
     workerBlobURL: false,
     gzip: false
+    // KEIN logger hier! sonst DataCloneError
   });
 
   await worker.load();
   await worker.loadLanguage(lang);
   await worker.initialize(lang);
   await worker.setParameters({
-    tessedit_pageseg_mode: '6',
-    tessedit_ocr_engine_mode: '1',
+    tessedit_pageseg_mode: '6',    // Block Text
+    tessedit_ocr_engine_mode: '1', // LSTM only
     user_defined_dpi: '150',
     preserve_interword_spaces: '1'
   });
@@ -236,7 +202,7 @@ async function ensureWorker(lang = 'deu') {
   return worker;
 }
 
-// ===== DATEI-EVENTS =====
+// ===== Events =====
 if (els.file) {
   els.file.addEventListener('change', () => {
     files = Array.from(els.file.files || []);
@@ -246,7 +212,7 @@ if (els.file) {
   });
 }
 
-// ===== SCAN =====
+// ===== Scan =====
 async function doScan() {
   if (!files.length) return;
   setBusy(true);
@@ -298,14 +264,14 @@ async function doScan() {
   }
 }
 
-// Doppelte Bindungen vermeiden
+// Doppelbindungen vermeiden
 if (els.scan) {
   els.scan.removeEventListener?.('click', window.__scanHandler__);
   window.__scanHandler__ = () => { doScan().catch(() => {}); };
   els.scan.addEventListener('click', window.__scanHandler__);
 }
 
-// ===== SELF CHECK =====
+// ===== Self-Check =====
 window.addEventListener('load', async () => {
   try {
     const check = async (p) => {

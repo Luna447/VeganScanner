@@ -1,29 +1,24 @@
-// SW: Version heben, wenn du etwas an vendor/tesseract änderst
-const VERSION = 'vegan-scanner-v6_7';
+// SW – VeganScanner (V6.8)
+// Wichtig: Query-Strings werden NICHT mehr ignoriert, um Cache-Busting zu erlauben.
+const VERSION = 'vegan-scanner-v6_8';
 
 const APP_SHELL = [
   'index.html',
-  'app.js?v=V6_7',
+  'app.js?v=V6_8',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
-
-  // Tesseract-Dateien (ohne Query – wir matchen ignoreSearch)
+  // Tesseract-Files ohne Query, aber wir matchen jetzt MIT Query
   'vendor/tesseract/tesseract.min.js',
   'vendor/tesseract/worker.min.js',
   'vendor/tesseract/tesseract-core.wasm.js',
-  'vendor/tesseract/tesseract-core.wasm',
-
-  // Falls vorhanden, stören nicht:
-  'vendor/tesseract/tesseract-core-simd.wasm',
-  'vendor/tesseract/tesseract-core-lstm.wasm',
-  'vendor/tesseract/tesseract-core-simd-lstm.wasm',
+  'vendor/tesseract/tesseract-core.wasm'
 ];
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(VERSION);
-    try { await c.addAll(APP_SHELL); } catch(e) { /* Dev-Server darf zicken */ }
+    try { await c.addAll(APP_SHELL); } catch(e) {}
     self.skipWaiting();
   })());
 });
@@ -55,7 +50,8 @@ self.addEventListener('fetch', e => {
 
 async function cacheFirst(req) {
   const cache = await caches.open(VERSION);
-  const hit = await cache.match(req, { ignoreVary: true, ignoreSearch: true });
+  // Query-Strings NICHT ignorieren
+  const hit = await cache.match(req, { ignoreVary: true, ignoreSearch: false });
   if (hit) return hit;
   const res = await fetch(req);
   if (res && res.ok && res.type !== 'opaque') {
@@ -73,7 +69,7 @@ async function networkThenCache(req) {
     }
     return res;
   } catch {
-    const hit = await cache.match(req, { ignoreVary: true, ignoreSearch: true });
+    const hit = await cache.match(req, { ignoreVary: true, ignoreSearch: false });
     if (hit) return hit;
     throw new Error('Offline und nicht im Cache: ' + req.url);
   }

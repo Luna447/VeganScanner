@@ -1,10 +1,9 @@
-/* app.js – VeganScanner (V6.7, strikt offline + robust)
-   - Lädt NUR lokale Tesseract-Bibliothek (vendor/tesseract/tesseract.min.js)
-   - Akzeptiert Builds ohne .version, solange createWorker existiert
-   - Persistenter Worker (await createWorker)
-   - Kein logger im Worker (verhindert DataCloneError)
-   - Optional echter % via Tesseract.setLogger; sonst Fake-Ticker
-   - Fortschritt stoppt SOFORT bei Fehlern
+/* app.js – VeganScanner (V6.8)
+   - Nur lokale Tesseract-Bibliothek
+   - Akzeptiert fehlendes Tesseract.version, prüft auf createWorker
+   - Persistenter Worker, kein logger im Worker (kein DataCloneError)
+   - Globaler Logger via setLogger, Progress mit echtem % und Fake-Ticker
+   - Stoppt Fortschritt SOFORT bei Fehlern
    - Preprocessing: Resize + Graustufen + harte Schwelle
 */
 
@@ -94,34 +93,25 @@ function stopProgress(reset = true) {
   if (reset) setProgressRatio(0);
 }
 
-// ===== PFADKONFIG =====
+// ===== PFADKONFIG (mit Cache-Buster) =====
+const BUST = 'v5-local-003';
 const paths = {
-  workerPath: 'vendor/tesseract/worker.min.js',
-  corePath:   'vendor/tesseract/tesseract-core.wasm.js',
-  langPath:   'vendor/tesseract/lang'
+  workerPath: `vendor/tesseract/worker.min.js?${BUST}`,
+  corePath:   `vendor/tesseract/tesseract-core.wasm.js?${BUST}`,
+  langPath:   `vendor/tesseract/lang`
 };
 
-// ===== Warte auf lokale Tesseract-Lib (robust) =====
+// ===== Tesseract lokal warten (ohne .version Pflicht) =====
 async function waitForLocalLib(timeoutMs = 10000) {
   const t0 = performance.now();
   while (true) {
     const T = window.Tesseract;
-    // 1) Idealfall: v5 meldet version 5.x
-    if (T && /^5\./.test(String(T.version || ''))) return T;
-
-    // 2) fallback: kein version-Feld, aber API ist v5-ähnlich
-    if (T && typeof T.createWorker === 'function') {
-      console.warn('[tess] Warnung: Tesseract.version fehlt. Nutze API-Fallback.');
-      return T;
-    }
-
-    // 3) offensichtlich veraltet
+    if (T && typeof T.createWorker === 'function') return T; // API ok
     if (T && typeof T.createWorker !== 'function') {
-      throw new Error('Gefundene Tesseract-Bibliothek unterstützt createWorker nicht. Falsche/alte Datei.');
+      throw new Error('Gefundene Tesseract-Bibliothek unterstützt createWorker nicht (zu alt/falsch).');
     }
-
     if (performance.now() - t0 > timeoutMs) {
-      throw new Error('Tesseract (lokal) nicht geladen. Prüfe <script> in index.html, Cache/ServiceWorker.');
+      throw new Error('Tesseract (lokal) nicht geladen. Prüfe <script> in index.html und lösche alten SW/Cache.');
     }
     await new Promise(r => setTimeout(r, 50));
   }
@@ -136,7 +126,7 @@ async function preprocessImage(file) {
     i.src = URL.createObjectURL(file);
   });
 
-  const maxSide = 1000; // 900–1200 je nach Qualität
+  const maxSide = 1000; // 900–1200 je nach Bedarf
   const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
   const w = Math.round(img.width * scale);
   const h = Math.round(img.height * scale);
@@ -186,7 +176,6 @@ async function ensureWorker(lang = 'deu') {
     }
   } catch {}
 
-  // Wichtig: createWorker ist in v5 async. Kein logger in den Optionen!
   worker = await T.createWorker({
     workerPath: paths.workerPath,
     corePath:   paths.corePath,
@@ -277,17 +266,17 @@ if (els.scan) {
   els.scan.addEventListener('click', window.__scanHandler__);
 }
 
-// ===== Self-Check (logge auch die Hauptlib) =====
+// ===== Self-Check =====
 window.addEventListener('load', async () => {
   try {
     const check = async (p) => {
       const r = await fetch(p, { cache: 'no-store' });
       log('check', p, r.status, r.headers.get('content-length'));
     };
-    await check('vendor/tesseract/tesseract.min.js'); // Hauptlib
+    await check(`vendor/tesseract/tesseract.min.js?${BUST}`);
     await check(paths.workerPath);
     await check(paths.corePath);
-    await check('vendor/tesseract/tesseract-core.wasm'); // roh
+    await check(`vendor/tesseract/tesseract-core.wasm?${BUST}`);
     setStatus('Bereit.');
     if (els.scan) els.scan.disabled = files.length === 0;
   } catch (e) {

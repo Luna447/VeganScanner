@@ -14,7 +14,6 @@ const els = {
   log:    document.getElementById('log'),
 };
 
-let ocrWorker = null;
 let files = [];
 
 function log(...args) {
@@ -22,18 +21,15 @@ function log(...args) {
   if (els.log) els.log.textContent += line + '\n';
   console.log('[app]', ...args);
 }
-
 function setBusy(b) {
   els.scan.disabled = b || files.length === 0;
   els.file.disabled = b;
   els.prog.hidden = !b;
 }
-
 function setStatus(msg, cls='') {
   els.status.className = 'muted mono ' + cls;
   els.status.textContent = msg;
 }
-
 function renderThumbs() {
   els.thumbs.innerHTML = '';
   files.forEach(f => {
@@ -45,7 +41,8 @@ function renderThumbs() {
   });
 }
 
-// Fallback: gleiche Major (v5) falls lokales Script hakt – aber Code läuft auch mit v6
+// Gleiche Major (v5) als Fallback laden, falls lokales Script nicht da ist.
+// Der recognize()-Weg läuft aber auch mit v6.
 async function ensureLibrary() {
   if (typeof window.Tesseract !== 'undefined') return;
   await new Promise((resolve, reject) => {
@@ -59,37 +56,9 @@ async function ensureLibrary() {
 
 const paths = {
   workerPath: 'vendor/tesseract/worker.min.js',
-  corePath:   'vendor/tesseract/tesseract-core.wasm.js', // Loader-Datei, kein Ordner!
+  corePath:   'vendor/tesseract/tesseract-core.wasm.js', // Loader-Datei
   langPath:   'vendor/tesseract/lang'
 };
-
-async function ensureWorker() {
-  await ensureLibrary();
-  const T = window.Tesseract;
-  if (!T) throw new Error('Tesseract nicht geladen');
-
-  if (ocrWorker) return ocrWorker;
-
-  // KEIN logger hier rein, sonst DataCloneError bei Versionsmix
-  const w = T.createWorker({
-    workerPath: paths.workerPath,
-    corePath:   paths.corePath,
-    langPath:   paths.langPath,
-    workerBlobURL: false
-  });
-
-  // v5 hat w.load(), v6 nicht. Mach’s kompatibel:
-  if (typeof w.load === 'function') {
-    await w.load();
-  }
-
-  await w.loadLanguage('deu+eng');
-  await w.initialize('deu+eng');
-
-  ocrWorker = w;
-  log('Worker bereit');
-  return w;
-}
 
 els.file.addEventListener('change', () => {
   files = Array.from(els.file.files || []);
@@ -101,15 +70,30 @@ els.file.addEventListener('change', () => {
 els.scan.addEventListener('click', async () => {
   if (!files.length) return;
   setBusy(true);
-  setStatus('Scanne...', 'ok');
   els.out.textContent = '';
+  setStatus('Scanne...', 'ok');
 
   try {
-    const w = await ensureWorker();
+    await ensureLibrary();
+    const T = window.Tesseract;
+    if (!T) throw new Error('Tesseract nicht geladen');
+
+    // Hinweis: logger kann bei manchen Bundles DataCloneError auslösen.
+    // Wenn das wieder auftaucht: logger aus dem Optionsobjekt entfernen.
+    const options = {
+      workerPath: paths.workerPath,
+      corePath:   paths.corePath,
+      langPath:   paths.langPath,
+      logger: m => {
+        if (m.progress != null) els.prog.value = m.progress;
+        if (m.status) setStatus(m.status, 'ok');
+      }
+    };
+
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       setStatus(`Scanne ${i+1}/${files.length}: ${f.name}`, 'ok');
-      const { data } = await w.recognize(f);
+      const { data } = await T.recognize(f, 'deu+eng', options);
       els.out.textContent += `# ${f.name}\n${data.text.trim()}\n\n`;
     }
     setStatus('Fertig.', 'ok');
@@ -122,22 +106,18 @@ els.scan.addEventListener('click', async () => {
   }
 });
 
-// Selbsttest beim Laden
+// Selbsttest: zeigen, dass die Brocken erreichbar sind
 window.addEventListener('load', async () => {
   try {
     const check = async (p) => {
       const r = await fetch(p);
       log('check', p, r.status, r.headers.get('content-length'));
     };
-    await check(paths.workerPath);
-    await check(paths.corePath);
-    await check('vendor/tesseract/tesseract-core.wasm'); // eine der Varianten
+    await check('vendor/tesseract/worker.min.js');
+    await check('vendor/tesseract/tesseract-core.wasm.js');
+    await check('vendor/tesseract/tesseract-core.wasm');
     setStatus('Bereit.');
   } catch (e) {
     log('Self-check failed', e);
   }
-});
-
-window.addEventListener('beforeunload', async () => {
-  try { if (ocrWorker) await ocrWorker.terminate(); } catch {}
 });

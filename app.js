@@ -81,14 +81,15 @@ els.scan.addEventListener('click', async () => {
     // Hinweis: logger kann bei manchen Bundles DataCloneError auslösen.
     // Wenn das wieder auftaucht: logger aus dem Optionsobjekt entfernen.
     const options = {
-      workerPath: paths.workerPath,
-      corePath:   paths.corePath,
-      langPath:   paths.langPath,
-      logger: m => {
-        if (m.progress != null) els.prog.value = m.progress;
-        if (m.status) setStatus(m.status, 'ok');
-      }
-    };
+		workerPath: paths.workerPath,
+		corePath:   paths.corePath,
+		langPath:   paths.langPath,
+		gzip: false,              // <— WICHTIG: .gz NICHT verwenden
+		logger: m => {
+			if (m.progress != null) els.prog.value = m.progress;
+			if (m.status) setStatus(m.status, 'ok');
+	}
+};
 
     for (let i = 0; i < files.length; i++) {
       const f = files[i];

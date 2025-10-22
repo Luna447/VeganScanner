@@ -1,4 +1,9 @@
-// app.js
+// ===== BOOT DIAGNOSE =====
+console.log('[boot] app.js geladen');
+window.addEventListener('error', e => console.error('[JS-Error]', e.message, e.filename+':'+e.lineno));
+window.addEventListener('unhandledrejection', e => console.error('[Promise-Reject]', e.reason));
+// =========================
+
 const els = {
   file:   document.getElementById('file'),
   scan:   document.getElementById('scan'),
@@ -14,7 +19,7 @@ let files = [];
 
 function log(...args) {
   const line = args.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(' ');
-  els.log.textContent += line + '\n';
+  if (els.log) els.log.textContent += line + '\n';
   console.log('[app]', ...args);
 }
 
@@ -40,7 +45,7 @@ function renderThumbs() {
   });
 }
 
-// Falls das lokale Script fehlschlug: gleiches Major (v5) vom CDN nachladen
+// Gleiches Major wie lokal (v5) als Fallback, falls lokales Script failt
 async function ensureLibrary() {
   if (typeof window.Tesseract !== 'undefined') return;
   await new Promise((resolve, reject) => {
@@ -52,31 +57,30 @@ async function ensureLibrary() {
   });
 }
 
-// Wichtiger Teil: corePath zeigt auf die .wasm.js, nicht nur den Ordner.
-// Logger NICHT als Option mitgeben, sondern global setzen.
 const paths = {
   workerPath: 'vendor/tesseract/worker.min.js',
-  corePath:   'vendor/tesseract/tesseract-core.wasm.js',
+  corePath:   'vendor/tesseract/tesseract-core.wasm.js', // Loader-Datei
   langPath:   'vendor/tesseract/lang'
 };
 
-Tesseract.setLogger(m => {
-  if (m.progress != null) els.prog.value = m.progress;
-  if (m.status) els.status.textContent = m.status;
-  if (m.progress != null || m.status) log('[tess]', m.status || '', m.progress ?? '');
-});
-
 async function ensureWorker() {
   await ensureLibrary();
-  if (!window.Tesseract) throw new Error('Tesseract nicht geladen');
+  const T = window.Tesseract;
+  if (!T) throw new Error('Tesseract nicht geladen');
 
   if (ocrWorker) return ocrWorker;
 
-  const w = Tesseract.createWorker({
+  // WICHTIG: logger hier rein, NICHT Tesseract.setLogger benutzen
+  const w = T.createWorker({
     workerPath: paths.workerPath,
     corePath:   paths.corePath,
     langPath:   paths.langPath,
-    workerBlobURL: false
+    workerBlobURL: false,
+    logger: m => {
+      if (m.progress != null) els.prog.value = m.progress;
+      if (m.status) setStatus(m.status, 'ok');
+      if (m.status || m.progress != null) log('[tess]', m.status || '', m.progress ?? '');
+    }
   });
 
   await w.load();
@@ -119,20 +123,16 @@ els.scan.addEventListener('click', async () => {
   }
 });
 
-// Selbsttest
+// Selbsttest beim Laden
 window.addEventListener('load', async () => {
   try {
     const check = async (p) => {
       const r = await fetch(p);
-      const len = r.headers.get('content-length');
-      log('check', p, r.status, len);
-      return +len || 0;
+      log('check', p, r.status, r.headers.get('content-length'));
     };
     await check(paths.workerPath);
     await check(paths.corePath);
     await check('vendor/tesseract/tesseract-core.wasm'); // eine der Varianten
-
-    setTimeout(() => log('Tesseract?', typeof window.Tesseract), 200);
     setStatus('Bereit.');
   } catch (e) {
     log('Self-check failed', e);

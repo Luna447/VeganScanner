@@ -45,7 +45,7 @@ function renderThumbs() {
   });
 }
 
-// Gleiches Major wie lokal (v5) als Fallback, falls lokales Script failt
+// Fallback: gleiche Major (v5) falls lokales Script hakt – aber Code läuft auch mit v6
 async function ensureLibrary() {
   if (typeof window.Tesseract !== 'undefined') return;
   await new Promise((resolve, reject) => {
@@ -59,7 +59,7 @@ async function ensureLibrary() {
 
 const paths = {
   workerPath: 'vendor/tesseract/worker.min.js',
-  corePath:   'vendor/tesseract/tesseract-core.wasm.js', // Loader-Datei
+  corePath:   'vendor/tesseract/tesseract-core.wasm.js', // Loader-Datei, kein Ordner!
   langPath:   'vendor/tesseract/lang'
 };
 
@@ -70,20 +70,19 @@ async function ensureWorker() {
 
   if (ocrWorker) return ocrWorker;
 
-  // WICHTIG: logger hier rein, NICHT Tesseract.setLogger benutzen
+  // KEIN logger hier rein, sonst DataCloneError bei Versionsmix
   const w = T.createWorker({
     workerPath: paths.workerPath,
     corePath:   paths.corePath,
     langPath:   paths.langPath,
-    workerBlobURL: false,
-    logger: m => {
-      if (m.progress != null) els.prog.value = m.progress;
-      if (m.status) setStatus(m.status, 'ok');
-      if (m.status || m.progress != null) log('[tess]', m.status || '', m.progress ?? '');
-    }
+    workerBlobURL: false
   });
 
-  await w.load();
+  // v5 hat w.load(), v6 nicht. Mach’s kompatibel:
+  if (typeof w.load === 'function') {
+    await w.load();
+  }
+
   await w.loadLanguage('deu+eng');
   await w.initialize('deu+eng');
 

@@ -87,15 +87,25 @@ const paths = {
 
 // ===== ONLINE-FALLBACK (nur wenn Tesseract fehlt) =====
 async function ensureLibrary() {
-  if (typeof window.Tesseract !== 'undefined') return;
+  // Wenn vorhanden, aber nicht v5 => neu laden
+  if (typeof window.Tesseract !== 'undefined') {
+    const ver = String(window.Tesseract.version || '');
+    console.log('[tess] vorhandene Version:', ver);
+    if (/^5\./.test(ver)) return; // passt
+  }
+
   await new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-    s.onload = resolve;
+    s.onload = () => {
+      console.log('[tess] geladen:', window.Tesseract?.version);
+      resolve();
+    };
     s.onerror = () => reject(new Error('tesseract.min.js konnte nicht geladen werden'));
     document.head.appendChild(s);
   });
 }
+
 
 // ===== PREPROCESSING (schneller + stabiler OCR-Input) =====
 async function preprocessImage(file) {

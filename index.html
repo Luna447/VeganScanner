@@ -28,9 +28,9 @@
     .err { color:#ff9ea8 }
   </style>
 
-  <!-- NUR lokal. Mit Query-String, damit der SW nicht alte Versionen serviert -->
-  <script src="vendor/tesseract/tesseract.min.js?v=v5-local-003" defer></script>
-  <script src="app.js?v=V6_8" type="module" defer></script>
+  <!-- Nur lokal. Cache-Buster NUR auf Hauptlib/App -->
+  <script src="vendor/tesseract/tesseract.min.js?v=v5-local-clean" defer></script>
+  <script src="app.js?v=V6_9" type="module" defer></script>
 </head>
 <body>
   <header>VeganScanner · OCR</header>
@@ -55,11 +55,5 @@
       <pre id="log" class="mono"></pre>
     </section>
   </main>
-
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=V6_8').catch(e => console.warn('SW fail', e));
-    }
-  </script>
 </body>
 </html>

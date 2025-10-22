@@ -1,10 +1,9 @@
-/* app.js – VeganScanner (V6.8)
-   - Nur lokale Tesseract-Bibliothek
+/* app.js – VeganScanner (V6.9: konsistente Offline-Builds)
    - Akzeptiert fehlendes Tesseract.version, prüft auf createWorker
-   - Persistenter Worker, kein logger im Worker (kein DataCloneError)
-   - Globaler Logger via setLogger, Progress mit echtem % und Fake-Ticker
-   - Stoppt Fortschritt SOFORT bei Fehlern
-   - Preprocessing: Resize + Graustufen + harte Schwelle
+   - Persistenter Worker, KEIN logger im Worker-Objekt
+   - Globaler Logger via setLogger (echte %), Fake-Ticker als Fallback
+   - Fortschritt stoppt SOFORT bei Fehlern
+   - Vorverarbeitung: Resize + Graustufen + harte Schwelle
 */
 
 console.log('[boot] app.js geladen');
@@ -93,25 +92,24 @@ function stopProgress(reset = true) {
   if (reset) setProgressRatio(0);
 }
 
-// ===== PFADKONFIG (mit Cache-Buster) =====
-const BUST = 'v5-local-003';
+// ===== PFADKONFIG (ohne Query!) =====
 const paths = {
-  workerPath: `vendor/tesseract/worker.min.js?${BUST}`,
-  corePath:   `vendor/tesseract/tesseract-core.wasm.js?${BUST}`,
-  langPath:   `vendor/tesseract/lang`
+  workerPath: 'vendor/tesseract/worker.min.js',
+  corePath:   'vendor/tesseract/tesseract-core.wasm.js',
+  langPath:   'vendor/tesseract/lang'
 };
 
-// ===== Tesseract lokal warten (ohne .version Pflicht) =====
+// ===== Lokale Tesseract-Lib warten =====
 async function waitForLocalLib(timeoutMs = 10000) {
   const t0 = performance.now();
   while (true) {
     const T = window.Tesseract;
-    if (T && typeof T.createWorker === 'function') return T; // API ok
+    if (T && typeof T.createWorker === 'function') return T; // API ok (v5)
     if (T && typeof T.createWorker !== 'function') {
       throw new Error('Gefundene Tesseract-Bibliothek unterstützt createWorker nicht (zu alt/falsch).');
     }
     if (performance.now() - t0 > timeoutMs) {
-      throw new Error('Tesseract (lokal) nicht geladen. Prüfe <script> in index.html und lösche alten SW/Cache.');
+      throw new Error('Tesseract (lokal) nicht geladen. Script-Tag/Cache/ServiceWorker prüfen.');
     }
     await new Promise(r => setTimeout(r, 50));
   }
@@ -177,11 +175,10 @@ async function ensureWorker(lang = 'deu') {
   } catch {}
 
   worker = await T.createWorker({
-    workerPath: paths.workerPath,
-    corePath:   paths.corePath,
-    langPath:   paths.langPath,
-    workerBlobURL: false,
-    gzip: false
+    workerPath: paths.workerPath,       // KEIN Query!
+    corePath:   paths.corePath,         // KEIN Query!
+    langPath:   paths.langPath
+    // Keine weiteren Optionen. Kein logger im Objekt!
   });
 
   await worker.load();
@@ -265,25 +262,3 @@ if (els.scan) {
   window.__scanHandler__ = () => { doScan().catch(() => {}); };
   els.scan.addEventListener('click', window.__scanHandler__);
 }
-
-// ===== Self-Check =====
-window.addEventListener('load', async () => {
-  try {
-    const check = async (p) => {
-      const r = await fetch(p, { cache: 'no-store' });
-      log('check', p, r.status, r.headers.get('content-length'));
-    };
-    await check(`vendor/tesseract/tesseract.min.js?${BUST}`);
-    await check(paths.workerPath);
-    await check(paths.corePath);
-    await check(`vendor/tesseract/tesseract-core.wasm?${BUST}`);
-    setStatus('Bereit.');
-    if (els.scan) els.scan.disabled = files.length === 0;
-  } catch (e) {
-    log('Self-check failed', e);
-  }
-});
-
-window.addEventListener('beforeunload', async () => {
-  try { await worker?.terminate(); } catch {}
-});

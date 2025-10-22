@@ -1,18 +1,20 @@
-// SW: Version heben, wenn du irgendwas an vendor/tesseract änderst
-const VERSION = 'v2025-10-21k';
+// SW: Version heben, wenn du etwas an vendor/tesseract änderst
+const VERSION = 'vegan-scanner-v6_7';
 
 const APP_SHELL = [
   'index.html',
-  'app.js',
+  'app.js?v=V6_7',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
 
-  // Tesseract-Dateien
+  // Tesseract-Dateien (ohne Query – wir matchen ignoreSearch)
   'vendor/tesseract/tesseract.min.js',
   'vendor/tesseract/worker.min.js',
   'vendor/tesseract/tesseract-core.wasm.js',
   'vendor/tesseract/tesseract-core.wasm',
+
+  // Falls vorhanden, stören nicht:
   'vendor/tesseract/tesseract-core-simd.wasm',
   'vendor/tesseract/tesseract-core-lstm.wasm',
   'vendor/tesseract/tesseract-core-simd-lstm.wasm',
@@ -21,7 +23,7 @@ const APP_SHELL = [
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(VERSION);
-    try { await c.addAll(APP_SHELL); } catch(e) { /* dev server darf auch mal zicken */ }
+    try { await c.addAll(APP_SHELL); } catch(e) { /* Dev-Server darf zicken */ }
     self.skipWaiting();
   })());
 });
@@ -53,10 +55,9 @@ self.addEventListener('fetch', e => {
 
 async function cacheFirst(req) {
   const cache = await caches.open(VERSION);
-  const hit = await cache.match(req, { ignoreVary:true, ignoreSearch:true });
+  const hit = await cache.match(req, { ignoreVary: true, ignoreSearch: true });
   if (hit) return hit;
   const res = await fetch(req);
-  // nur ok & nicht opaque cachen
   if (res && res.ok && res.type !== 'opaque') {
     try { await cache.put(req, res.clone()); } catch {}
   }
@@ -72,9 +73,8 @@ async function networkThenCache(req) {
     }
     return res;
   } catch {
-    const hit = await cache.match(req, { ignoreVary:true, ignoreSearch:true });
+    const hit = await cache.match(req, { ignoreVary: true, ignoreSearch: true });
     if (hit) return hit;
     throw new Error('Offline und nicht im Cache: ' + req.url);
   }
 }
-

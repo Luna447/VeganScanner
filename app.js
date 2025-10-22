@@ -1,6 +1,6 @@
-/* app.js – VeganScanner (V6.6, strikt offline)
-   - Lädt NUR lokale Tesseract v5 (vendor/tesseract/tesseract.min.js)
-   - Bricht ab, wenn nicht v5
+/* app.js – VeganScanner (V6.7, strikt offline + robust)
+   - Lädt NUR lokale Tesseract-Bibliothek (vendor/tesseract/tesseract.min.js)
+   - Akzeptiert Builds ohne .version, solange createWorker existiert
    - Persistenter Worker (await createWorker)
    - Kein logger im Worker (verhindert DataCloneError)
    - Optional echter % via Tesseract.setLogger; sonst Fake-Ticker
@@ -101,17 +101,27 @@ const paths = {
   langPath:   'vendor/tesseract/lang'
 };
 
-// ===== Warte auf lokale v5 =====
-async function waitForLocalV5(timeoutMs = 8000) {
+// ===== Warte auf lokale Tesseract-Lib (robust) =====
+async function waitForLocalLib(timeoutMs = 10000) {
   const t0 = performance.now();
   while (true) {
     const T = window.Tesseract;
+    // 1) Idealfall: v5 meldet version 5.x
     if (T && /^5\./.test(String(T.version || ''))) return T;
-    if (T && !/^5\./.test(String(T.version || ''))) {
-      throw new Error(`Falsche Tesseract-Version (${T.version}). Erwartet v5.x. Ersetze vendor/tesseract/tesseract.min.js durch v5 aus npm.`);
+
+    // 2) fallback: kein version-Feld, aber API ist v5-ähnlich
+    if (T && typeof T.createWorker === 'function') {
+      console.warn('[tess] Warnung: Tesseract.version fehlt. Nutze API-Fallback.');
+      return T;
     }
+
+    // 3) offensichtlich veraltet
+    if (T && typeof T.createWorker !== 'function') {
+      throw new Error('Gefundene Tesseract-Bibliothek unterstützt createWorker nicht. Falsche/alte Datei.');
+    }
+
     if (performance.now() - t0 > timeoutMs) {
-      throw new Error('Tesseract (lokal) nicht geladen. Prüfe <script> in index.html und Caching/ServiceWorker.');
+      throw new Error('Tesseract (lokal) nicht geladen. Prüfe <script> in index.html, Cache/ServiceWorker.');
     }
     await new Promise(r => setTimeout(r, 50));
   }
@@ -126,7 +136,7 @@ async function preprocessImage(file) {
     i.src = URL.createObjectURL(file);
   });
 
-  const maxSide = 1000; // 900–1200 nach Geschmack
+  const maxSide = 1000; // 900–1200 je nach Qualität
   const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
   const w = Math.round(img.width * scale);
   const h = Math.round(img.height * scale);
@@ -161,40 +171,36 @@ function analyzeIngredients(txt) {
 
 // ===== Worker (persistenter v5) =====
 async function ensureWorker(lang = 'deu') {
-  const T = await waitForLocalV5();
+  const T = await waitForLocalLib();
   if (worker) return worker;
 
-  // Echte % nur über globalen Logger, NICHT im Worker-Objekt
   try {
     if (typeof T.setLogger === 'function') {
       T.setLogger(m => {
         try {
-          if (m && typeof m.progress === 'number') {
-            setProgressRatio(m.progress);
-          } else {
-            setProgressIndeterminate(true);
-          }
+          if (m && typeof m.progress === 'number') setProgressRatio(m.progress);
+          else setProgressIndeterminate(true);
           if (m && m.status) setStatus(m.status, 'ok');
         } catch {}
       });
     }
   } catch {}
 
+  // Wichtig: createWorker ist in v5 async. Kein logger in den Optionen!
   worker = await T.createWorker({
     workerPath: paths.workerPath,
     corePath:   paths.corePath,
     langPath:   paths.langPath,
     workerBlobURL: false,
     gzip: false
-    // KEIN logger hier! sonst DataCloneError
   });
 
   await worker.load();
   await worker.loadLanguage(lang);
   await worker.initialize(lang);
   await worker.setParameters({
-    tessedit_pageseg_mode: '6',    // Block Text
-    tessedit_ocr_engine_mode: '1', // LSTM only
+    tessedit_pageseg_mode: '6',
+    tessedit_ocr_engine_mode: '1',
     user_defined_dpi: '150',
     preserve_interword_spaces: '1'
   });
@@ -271,16 +277,17 @@ if (els.scan) {
   els.scan.addEventListener('click', window.__scanHandler__);
 }
 
-// ===== Self-Check =====
+// ===== Self-Check (logge auch die Hauptlib) =====
 window.addEventListener('load', async () => {
   try {
     const check = async (p) => {
       const r = await fetch(p, { cache: 'no-store' });
       log('check', p, r.status, r.headers.get('content-length'));
     };
+    await check('vendor/tesseract/tesseract.min.js'); // Hauptlib
     await check(paths.workerPath);
     await check(paths.corePath);
-    await check('vendor/tesseract/tesseract-core.wasm');
+    await check('vendor/tesseract/tesseract-core.wasm'); // roh
     setStatus('Bereit.');
     if (els.scan) els.scan.disabled = files.length === 0;
   } catch (e) {

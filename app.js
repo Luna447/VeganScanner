@@ -1,8 +1,11 @@
-/* app.js – VeganScanner (V6.1)
-   • Persistenter Worker (schneller bei mehreren Scans)
-   • Logger zurück + indeterminater Progress
-   • Aggressiveres Resize + B/W-Threshold
-   • Offline-first (vendor/), Online-Fallback (CDN)
+/* app.js – VeganScanner (V6.3, passend zu deiner index.html)
+   - Kein zusätzliches Script-Nachladen (vertraut ausschließlich auf <script ... tesseract.min.js>)
+   - Strenge v5-Prüfung, klare Fehlermeldung bei Version-Mix
+   - Persistenter Worker (await createWorker in v5)
+   - Keinen logger im Worker-Objekt (verhindert DataCloneError)
+   - Optional globaler Logger via Tesseract.setLogger, wenn vorhanden
+   - Fortschrittsbalken: indeterminate + echter % + Fake-Ticker, Stop sofort bei Fehlern
+   - Schnellere Vorverarbeitung (Resize + Graustufen + harte Schwelle)
 */
 
 // ===== BOOT DIAGNOSE =====
@@ -14,7 +17,7 @@ window.addEventListener('unhandledrejection', e => console.error('[Promise-Rejec
 const els = {
   file:   document.getElementById('file'),
   scan:   document.getElementById('scan'),
-  prog:   document.getElementById('prog'),   // <progress id="prog">
+  prog:   document.getElementById('prog'),
   status: document.getElementById('status'),
   out:    document.getElementById('out'),
   thumbs: document.getElementById('thumbs'),
@@ -22,7 +25,8 @@ const els = {
 };
 
 let files = [];
-let worker = null;   // persistenter Worker
+let worker = null;         // persistenter Worker
+let fakeTimer = null;      // Fake-Progress-Ticker
 
 // ===== UTIL =====
 function log(...args) {
@@ -59,8 +63,7 @@ let rafLock = false;
 function setProgressIndeterminate(on) {
   if (!els.prog) return;
   if (on) {
-    // indeterminat: value-Attribut entfernen
-    els.prog.removeAttribute('value');
+    els.prog.removeAttribute('value'); // indeterminate
     els.prog.max = 1;
   } else {
     els.prog.value = 0;
@@ -77,6 +80,21 @@ function setProgressRatio(r) {
     rafLock = false;
   });
 }
+function startFakeProgress() {
+  clearInterval(fakeTimer);
+  // falls value existiert, langsam Richtung 0.9 „atmen“, bis echte Events kommen
+  fakeTimer = setInterval(() => {
+    if (!els.prog) return;
+    const v = Number(els.prog.value);
+    if (!Number.isFinite(v)) return;       // indeterminate aktiv, nichts tun
+    setProgressRatio(Math.min(0.9, (v || 0) + 0.02));
+  }, 250);
+}
+function stopProgress(reset = true) {
+  clearInterval(fakeTimer);
+  setProgressIndeterminate(false);
+  if (reset) setProgressRatio(0);
+}
 
 // ===== PFADKONFIG OFFLINE =====
 const paths = {
@@ -85,27 +103,21 @@ const paths = {
   langPath:   'vendor/tesseract/lang'
 };
 
-// ===== ONLINE-FALLBACK (nur wenn Tesseract fehlt) =====
-async function ensureLibrary() {
-  // Wenn vorhanden, aber nicht v5 => neu laden
-  if (typeof window.Tesseract !== 'undefined') {
-    const ver = String(window.Tesseract.version || '');
-    console.log('[tess] vorhandene Version:', ver);
-    if (/^5\./.test(ver)) return; // passt
+// ===== Warten bis Tesseract v5 geladen ist (aus index.html Script-Tag) =====
+async function waitForTesseractV5(timeoutMs = 8000) {
+  const t0 = performance.now();
+  while (true) {
+    const T = window.Tesseract;
+    if (T && /^5\./.test(String(T.version || ''))) return T;
+    if (T && !/^5\./.test(String(T.version || ''))) {
+      throw new Error(`Falsche Tesseract-Version (${T.version}). Erwartet v5.x. Bitte lokale vendor/tesseract/tesseract.min.js gegen v5 ersetzen oder nur CDN v5 nutzen.`);
+    }
+    if (performance.now() - t0 > timeoutMs) {
+      throw new Error('Tesseract wurde nicht geladen. Prüfe Script-Tag in index.html.');
+    }
+    await new Promise(r => setTimeout(r, 50));
   }
-
-  await new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-    s.onload = () => {
-      console.log('[tess] geladen:', window.Tesseract?.version);
-      resolve();
-    };
-    s.onerror = () => reject(new Error('tesseract.min.js konnte nicht geladen werden'));
-    document.head.appendChild(s);
-  });
 }
-
 
 // ===== PREPROCESSING (schneller + stabiler OCR-Input) =====
 async function preprocessImage(file) {
@@ -116,8 +128,8 @@ async function preprocessImage(file) {
     i.src = URL.createObjectURL(file);
   });
 
-  // Aggressiveres Resize: große, komprimierte JPGs werden sonst langsam
-  const maxSide = 900; // vorher 1500
+  // Aggressives Resize: JPG-Ziegelsteine werden sonst lahm
+  const maxSide = 1000; // feinfühlig zwischen 900–1200 anpassen
   const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
   const w = Math.round(img.width * scale);
   const h = Math.round(img.height * scale);
@@ -127,12 +139,11 @@ async function preprocessImage(file) {
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, w, h);
 
-  // Graustufen + härtere Schwelle + leichte Entglättung
+  // Graustufen + harte Schwelle
   const data = ctx.getImageData(0, 0, w, h);
   const p = data.data;
   for (let i = 0; i < p.length; i += 4) {
     const g = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
-    // etwas knackiger: harte Schwelle um 180 + clamp
     const v = g > 200 ? 255 : g < 70 ? 0 : g;
     p[i] = p[i + 1] = p[i + 2] = v;
   }
@@ -154,38 +165,33 @@ function analyzeIngredients(txt) {
 
 // ===== Worker-Setup (persistenter Worker, v5-kompatibel) =====
 async function ensureWorker(lang = 'deu') {
-  await ensureLibrary();
-  const T = window.Tesseract;
-  if (!T) throw new Error('Tesseract nicht geladen');
-
+  const T = await waitForTesseractV5();
   if (worker) return worker;
 
-  // Sicherer Progress: erst versuchen, den globalen Logger zu setzen (wird NICHT über postMessage geschickt)
+  // Globaler Logger (wenn vorhanden) für echte Prozent, OHNE in Worker-Options zu landen
   try {
     if (typeof T.setLogger === 'function') {
       T.setLogger(m => {
         try {
           if (m && typeof m.progress === 'number') {
-            setProgressRatio(m.progress);           // echter Fortschritt
+            // Wechsel aus indeterminate raus, echte Werte übernehmen
+            setProgressRatio(m.progress);
           } else {
-            setProgressIndeterminate(true);         // „arbeitet…“
+            setProgressIndeterminate(true);
           }
           if (m && m.status) setStatus(m.status, 'ok');
         } catch (_) {}
       });
     }
-  } catch (_) {
-    // Notfalls ignorieren; indeterminate bleibt aktiv
-  }
+  } catch (_) {}
 
-  // WICHTIG: createWorker ist in v5 ASYNC
+  // Wichtig: in v5 ist createWorker ASYNC und der logger DARF HIER NICHT rein
   worker = await T.createWorker({
-    workerPath: 'vendor/tesseract/worker.min.js',
-    corePath:   'vendor/tesseract/tesseract-core.wasm.js',
-    langPath:   'vendor/tesseract/lang',
+    workerPath: paths.workerPath,
+    corePath:   paths.corePath,
+    langPath:   paths.langPath,
     workerBlobURL: false,
     gzip: false
-    // KEIN logger hier! Sonst DataCloneError in manchen Umgebungen.
   });
 
   await worker.load();
@@ -211,31 +217,6 @@ if (els.file) {
   });
 }
 
-// direkt vor der Schleife in doScan():
-let fakeTimer = null;
-
-// pro Datei:
-setProgressIndeterminate(true);
-setProgressRatio(0);
-clearInterval(fakeTimer);
-fakeTimer = setInterval(() => {
-  // sanft Richtung 0.9 „atmen“, falls keine echten Updates kommen
-  if (els.prog && !isNaN(els.prog.value)) {
-    const v = Math.min(0.9, (Number(els.prog.value) || 0) + 0.02);
-    setProgressRatio(v);
-  }
-}, 250);
-
-// nach erfolgreichem recognize:
-clearInterval(fakeTimer);
-setProgressRatio(1);
-
-// im finally von doScan():
-clearInterval(fakeTimer);
-setProgressIndeterminate(false);
-setProgressRatio(0);
-
-
 // ===== SCAN =====
 async function doScan() {
   if (!files.length) return;
@@ -243,6 +224,7 @@ async function doScan() {
   if (els.out) els.out.textContent = '';
   setStatus('Scanne...', 'ok');
   setProgressIndeterminate(true);
+  startFakeProgress();
 
   const startAll = performance.now();
 
@@ -255,7 +237,7 @@ async function doScan() {
       const f = files[i];
       setStatus(`Scanne ${i + 1}/${files.length}: ${f.name}`, 'ok');
 
-      // pro Datei: Progress zurücksetzen
+      // pro Datei: Progress sauber zurücksetzen
       setProgressIndeterminate(true);
       setProgressRatio(0);
 
@@ -271,20 +253,24 @@ async function doScan() {
         els.out.textContent += `# ${f.name}  (${ms} ms)\n${text}\n\n`;
         els.out.textContent += analyzeIngredients(text) + '\n\n';
       }
+
+      // Datei fertig: Progress voll
+      setProgressRatio(1);
     }
 
     const total = Math.round(performance.now() - startAll);
     setStatus(`Fertig in ${Math.round(total / 1000)}s.`, 'ok');
-    setProgressRatio(1);
   } catch (e) {
     console.error(e);
     setStatus('Fehler: ' + e.message, 'err');
     log('ERR', e.stack || e);
+    // Bei Fehler: Progress sofort stoppen, damit nix weiterblinkt
+    stopProgress(true);
+    return; // früh raus
   } finally {
     setBusy(false);
-    // Progress zurücksetzen, damit der Balken nicht "klebt"
-    setProgressIndeterminate(false);
-    setProgressRatio(0);
+    // Nach Lauf: sauber zurücksetzen
+    stopProgress(true);
   }
 }
 
@@ -312,7 +298,7 @@ window.addEventListener('load', async () => {
   }
 });
 
-// ===== Aufräumen (optional) =====
+// ===== Aufräumen =====
 window.addEventListener('beforeunload', async () => {
   try { await worker?.terminate(); } catch(_) {}
 });

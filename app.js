@@ -142,7 +142,7 @@ function analyzeIngredients(txt) {
              : 'Vegan-Quickcheck: keine offensichtlichen tierischen Zutaten gefunden';
 }
 
-// ===== Worker-Setup (persistenter Worker für Tempo) =====
+// ===== Worker-Setup (persistenter Worker, v5-kompatibel) =====
 async function ensureWorker(lang = 'deu') {
   await ensureLibrary();
   const T = window.Tesseract;
@@ -150,35 +150,40 @@ async function ensureWorker(lang = 'deu') {
 
   if (worker) return worker;
 
-  // Logger zurück, aber sicher: drosseln und nur wenn Felder existieren
-  const logger = (m) => {
-    try {
-      if (m && typeof m.progress === 'number') {
-        setProgressRatio(m.progress);
-      } else if (m && m.status) {
-        // wenn keine Prozent bekannt, indeterminiert anzeigen
-        setProgressIndeterminate(true);
-      }
-      if (m && m.status) setStatus(m.status, 'ok');
-    } catch (_) { /* egal */ }
-  };
+  // Sicherer Progress: erst versuchen, den globalen Logger zu setzen (wird NICHT über postMessage geschickt)
+  try {
+    if (typeof T.setLogger === 'function') {
+      T.setLogger(m => {
+        try {
+          if (m && typeof m.progress === 'number') {
+            setProgressRatio(m.progress);           // echter Fortschritt
+          } else {
+            setProgressIndeterminate(true);         // „arbeitet…“
+          }
+          if (m && m.status) setStatus(m.status, 'ok');
+        } catch (_) {}
+      });
+    }
+  } catch (_) {
+    // Notfalls ignorieren; indeterminate bleibt aktiv
+  }
 
-  worker = T.createWorker({
-    workerPath: paths.workerPath,
-    corePath:   paths.corePath,
-    langPath:   paths.langPath,
+  // WICHTIG: createWorker ist in v5 ASYNC
+  worker = await T.createWorker({
+    workerPath: 'vendor/tesseract/worker.min.js',
+    corePath:   'vendor/tesseract/tesseract-core.wasm.js',
+    langPath:   'vendor/tesseract/lang',
     workerBlobURL: false,
-    gzip: false,
-    logger
+    gzip: false
+    // KEIN logger hier! Sonst DataCloneError in manchen Umgebungen.
   });
 
   await worker.load();
   await worker.loadLanguage(lang);
   await worker.initialize(lang);
-  // schnellere Heuristiken
   await worker.setParameters({
-    tessedit_pageseg_mode: '6',   // Block of text
-    tessedit_ocr_engine_mode: '1',// LSTM only
+    tessedit_pageseg_mode: '6',
+    tessedit_ocr_engine_mode: '1',
     user_defined_dpi: '150',
     preserve_interword_spaces: '1'
   });
@@ -195,6 +200,31 @@ if (els.file) {
     if (els.scan) els.scan.disabled = files.length === 0;
   });
 }
+
+// direkt vor der Schleife in doScan():
+let fakeTimer = null;
+
+// pro Datei:
+setProgressIndeterminate(true);
+setProgressRatio(0);
+clearInterval(fakeTimer);
+fakeTimer = setInterval(() => {
+  // sanft Richtung 0.9 „atmen“, falls keine echten Updates kommen
+  if (els.prog && !isNaN(els.prog.value)) {
+    const v = Math.min(0.9, (Number(els.prog.value) || 0) + 0.02);
+    setProgressRatio(v);
+  }
+}, 250);
+
+// nach erfolgreichem recognize:
+clearInterval(fakeTimer);
+setProgressRatio(1);
+
+// im finally von doScan():
+clearInterval(fakeTimer);
+setProgressIndeterminate(false);
+setProgressRatio(0);
+
 
 // ===== SCAN =====
 async function doScan() {
